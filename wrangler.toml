@@ -1,0 +1,15 @@
+# Cloudflare Pages configuration for Nexus One
+pages_build_output_dir = ".vercel/output/static"
+
+name = "nexus-one"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 Database binding - will be updated after creation
+d1_databases = [
+  { binding = "DB", database_name = "nexus-one-db", database_id = "4a9ccee2-1c00-4db3-bcbd-a9fc218a38fb" }
+]
+
+[vars]
+NODE_ENV = "production"
+JWT_SECRET = "nexus-one-super-secret-change-in-production-2024"
