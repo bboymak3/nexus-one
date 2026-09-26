@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword } from '@/lib/auth';
 import { createSessionToken, verifySessionToken, readEnv } from '@/lib/session';
 import { jsonResponse, errorResponse, unauthorizedResponse, parseBody } from '@/lib/response';
 import { getActiveTenantSession } from '@/lib/guards';
+import { isExpired, formatDate } from '@/lib/subscription';
 
 export const runtime = 'edge';
 
@@ -72,9 +73,12 @@ export async function POST(req: NextRequest) {
       const { tenantSlug } = body as any;
       if (!tenantSlug) return errorResponse('Slug del negocio es requerido');
 
-      const tenants = await db.prepare('SELECT * FROM nx_tenants WHERE slug = ? AND status = ?').bind(tenantSlug, 'active').all();
-      const tenant = tenants.results?.[0] as any;
-      if (!tenant) return errorResponse('Negocio no encontrado o inactivo');
+      const tenant = await db.prepare('SELECT * FROM nx_tenants WHERE slug = ?').bind(tenantSlug).first() as any;
+      if (!tenant) return errorResponse('Negocio no encontrado');
+      if (tenant.status !== 'active') return errorResponse('Este negocio esta suspendido. Contacte al administrador.', 403);
+      if (isExpired(tenant.subscription_expires_at)) {
+        return errorResponse(`La suscripcion de este negocio vencio el ${formatDate(tenant.subscription_expires_at)}. Contacte al administrador para renovarla.`, 403);
+      }
 
       const users = await db.prepare(
         'SELECT * FROM nx_tenant_users WHERE tenant_id = ? AND username = ? AND is_active = 1'

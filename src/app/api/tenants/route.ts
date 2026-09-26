@@ -3,6 +3,7 @@ import { getRequestContext } from '@cloudflare/next-on-pages';
 import { verifySessionToken } from '@/lib/session';
 import { hashPassword } from '@/lib/auth';
 import { jsonResponse, errorResponse, unauthorizedResponse, parseBody, slugify } from '@/lib/response';
+import { isBillingCycle, addBillingCycle, renewedExpiry, type BillingCycle } from '@/lib/subscription';
 
 export const runtime = 'edge';
 
@@ -52,8 +53,8 @@ export async function GET(req: NextRequest) {
   );
 
   const stats = await db.prepare(
-    'SELECT COUNT(*) as total, SUM(CASE WHEN status = \'active\' THEN 1 ELSE 0 END) as active, SUM(CASE WHEN status = \'suspended\' THEN 1 ELSE 0 END) as suspended FROM nx_tenants'
-  ).first();
+    'SELECT COUNT(*) as total, SUM(CASE WHEN status = \'active\' THEN 1 ELSE 0 END) as active, SUM(CASE WHEN status = \'suspended\' THEN 1 ELSE 0 END) as suspended, SUM(CASE WHEN status = \'active\' AND subscription_expires_at IS NOT NULL AND subscription_expires_at <= ? THEN 1 ELSE 0 END) as expired FROM nx_tenants'
+  ).bind(new Date().toISOString()).first();
 
   return jsonResponse({ tenants: result.results || [], stats });
 }
@@ -78,9 +79,13 @@ export async function POST(req: NextRequest) {
       plan?: string;
       maxUsers?: number;
       maxProducts?: number;
+      billingCycle?: string;
     }>(req);
 
     const { name, description, ownerName, ownerEmail, ownerPhone, ownerPassword, plan, maxUsers, maxProducts } = body;
+    const billingCycle: BillingCycle = isBillingCycle(body.billingCycle) ? body.billingCycle : 'monthly';
+    // Primer corte: un periodo desde hoy (null si no tiene corte)
+    const firstExpiry = addBillingCycle(new Date(), billingCycle);
 
     if (!name || name.trim().length < 2) {
       return errorResponse('El nombre del negocio es requerido (min 2 caracteres)');
@@ -99,9 +104,9 @@ export async function POST(req: NextRequest) {
     const now = new Date().toISOString();
 
     await db.prepare(`
-      INSERT INTO nx_tenants (id, name, slug, description, owner_name, owner_email, owner_phone, plan, max_users, max_products, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(id, name.trim(), slug, description || '', ownerName || '', ownerEmail || '', ownerPhone || '', plan || 'basic', maxUsers || 5, maxProducts || 500, now, now).run();
+      INSERT INTO nx_tenants (id, name, slug, description, owner_name, owner_email, owner_phone, plan, max_users, max_products, billing_cycle, subscription_expires_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, name.trim(), slug, description || '', ownerName || '', ownerEmail || '', ownerPhone || '', plan || 'basic', maxUsers || 5, maxProducts || 500, billingCycle, firstExpiry ? firstExpiry.toISOString() : null, now, now).run();
 
     // Create owner user if credentials provided
     if (ownerPassword && ownerPassword.length >= 4) {
@@ -131,6 +136,8 @@ export async function POST(req: NextRequest) {
         ownerPhone: ownerPhone || '',
         plan: plan || 'basic',
         status: 'active',
+        billingCycle,
+        subscriptionExpiresAt: firstExpiry ? firstExpiry.toISOString() : null,
         loginUrl: `${slug}`,
         ownerUsername: ownerPassword ? `${slug}-admin` : null,
       },
@@ -149,9 +156,12 @@ export async function PUT(req: NextRequest) {
   if (!db) return errorResponse('Database not available');
 
   try {
-    const body = await parseBody<{ id: string; name?: string; description?: string; ownerName?: string; ownerEmail?: string; ownerPhone?: string; plan?: string; status?: string; maxUsers?: number; maxProducts?: number; settings?: any }>(req);
-    const { id, ...updates } = body;
+    const body = await parseBody<{ id: string; name?: string; description?: string; ownerName?: string; ownerEmail?: string; ownerPhone?: string; plan?: string; status?: string; maxUsers?: number; maxProducts?: number; settings?: any; billingCycle?: string; subscriptionExpiresAt?: string | null; renew?: boolean }>(req);
+    const { id, renew, billingCycle, subscriptionExpiresAt, ...updates } = body;
     if (!id) return errorResponse('ID del tenant es requerido');
+
+    const current = await db.prepare('SELECT billing_cycle, subscription_expires_at FROM nx_tenants WHERE id = ?').bind(id).first() as any;
+    if (!current) return errorResponse('Negocio no encontrado', 404);
 
     const sets: string[] = ['updated_at = datetime(\'now\')'];
     const values: any[] = [];
@@ -174,6 +184,35 @@ export async function PUT(req: NextRequest) {
       values.push(JSON.stringify(updates.settings));
     }
 
+    // Suscripcion: ciclo de cobro, fecha de corte y renovacion con un clic
+    let cycle: BillingCycle = isBillingCycle(current.billing_cycle) ? current.billing_cycle : 'monthly';
+    if (billingCycle !== undefined) {
+      if (!isBillingCycle(billingCycle)) return errorResponse('Ciclo invalido. Use: monthly, annual, none');
+      cycle = billingCycle;
+      sets.push('billing_cycle = ?');
+      values.push(cycle);
+    }
+    let newExpiry: string | null | undefined;
+    if (subscriptionExpiresAt !== undefined) {
+      if (subscriptionExpiresAt === null || subscriptionExpiresAt === '') newExpiry = null;
+      else {
+        const d = new Date(subscriptionExpiresAt);
+        if (isNaN(d.getTime())) return errorResponse('Fecha de corte invalida');
+        newExpiry = d.toISOString();
+      }
+    }
+    if (renew) {
+      if (cycle === 'none') return errorResponse('El negocio no tiene ciclo de cobro; elija mensual o anual para renovar');
+      const base = newExpiry !== undefined ? newExpiry : current.subscription_expires_at;
+      newExpiry = renewedExpiry(base, cycle)!.toISOString();
+    } else if (billingCycle === 'none' && subscriptionExpiresAt === undefined) {
+      newExpiry = null; // sin ciclo = sin corte
+    }
+    if (newExpiry !== undefined) {
+      sets.push('subscription_expires_at = ?');
+      values.push(newExpiry);
+    }
+
     if (updates.status !== undefined && !['active', 'suspended'].includes(updates.status)) {
       return errorResponse('Estado invalido. Use: active, suspended');
     }
@@ -186,7 +225,7 @@ export async function PUT(req: NextRequest) {
     values.push(id);
     await db.prepare(`UPDATE nx_tenants SET ${sets.join(', ')} WHERE id = ?`).bind(...values).run();
 
-    return jsonResponse({ success: true, message: 'Negocio actualizado' });
+    return jsonResponse({ success: true, message: renew ? 'Suscripcion renovada' : 'Negocio actualizado', subscriptionExpiresAt: newExpiry !== undefined ? newExpiry : current.subscription_expires_at });
   } catch (error: any) {
     return errorResponse(error.message || 'Error al actualizar', 500);
   }
