@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   if (!tenantId) return errorResponse('tenantId es requerido');
 
   const users = await db.prepare(
-    'SELECT id, tenant_id, username, full_name, role, is_active, last_login, created_at FROM tenant_users WHERE tenant_id = ? ORDER BY created_at'
+    'SELECT id, tenant_id, username, full_name, role, is_active, last_login, created_at FROM nx_tenant_users WHERE tenant_id = ? ORDER BY created_at'
   ).bind(tenantId).all();
 
   return jsonResponse({ users: users.results || [] });
@@ -82,16 +82,16 @@ export async function POST(req: NextRequest) {
       if (active.user.role !== 'admin') return errorResponse('Solo un administrador del negocio puede crear usuarios', 403);
     }
 
-    const tenant = await db.prepare('SELECT id FROM tenants WHERE id = ?').bind(tenantId).first();
+    const tenant = await db.prepare('SELECT id FROM nx_tenants WHERE id = ?').bind(tenantId).first();
     if (!tenant) return errorResponse('Negocio no encontrado');
 
     const existing = await db.prepare(
-      'SELECT id FROM tenant_users WHERE tenant_id = ? AND username = ?'
+      'SELECT id FROM nx_tenant_users WHERE tenant_id = ? AND username = ?'
     ).bind(tenantId, username).first();
     if (existing) return errorResponse('El usuario ya existe en este negocio');
 
-    const count = await db.prepare('SELECT COUNT(*) as c FROM tenant_users WHERE tenant_id = ?').bind(tenantId).first() as any;
-    const maxUsers = await db.prepare('SELECT max_users FROM tenants WHERE id = ?').bind(tenantId).first() as any;
+    const count = await db.prepare('SELECT COUNT(*) as c FROM nx_tenant_users WHERE tenant_id = ?').bind(tenantId).first() as any;
+    const maxUsers = await db.prepare('SELECT max_users FROM nx_tenants WHERE id = ?').bind(tenantId).first() as any;
     if (count.c >= maxUsers.max_users && payload.userType !== 'super_admin') {
       return errorResponse(`Limite de usuarios alcanzado (${maxUsers.max_users})`);
     }
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
     const id = 'tu-' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 
     await db.prepare(
-      'INSERT INTO tenant_users (id, tenant_id, username, password, full_name, role) VALUES (?, ?, ?, ?, ?, ?)'
+      'INSERT INTO nx_tenant_users (id, tenant_id, username, password, full_name, role) VALUES (?, ?, ?, ?, ?, ?)'
     ).bind(id, tenantId, username, hashedPw, fullName || username, role).run();
 
     return jsonResponse({
@@ -125,6 +125,6 @@ export async function DELETE(req: NextRequest) {
   const { id } = await parseBody<{ id: string }>(req);
   if (!id) return errorResponse('ID del usuario es requerido');
 
-  await db.prepare('DELETE FROM tenant_users WHERE id = ?').bind(id).run();
+  await db.prepare('DELETE FROM nx_tenant_users WHERE id = ?').bind(id).run();
   return jsonResponse({ success: true, message: 'Usuario eliminado' });
 }

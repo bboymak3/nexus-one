@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
   const status = url.searchParams.get('status') || 'all';
   const search = url.searchParams.get('search') || '';
 
-  let query = 'SELECT t.*, (SELECT COUNT(*) FROM tenant_users WHERE tenant_id = t.id) as user_count FROM tenants t';
+  let query = 'SELECT t.*, (SELECT COUNT(*) FROM nx_tenant_users WHERE tenant_id = t.id) as user_count FROM nx_tenants t';
   const params: any[] = [];
 
   if (status !== 'all') {
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
   );
 
   const stats = await db.prepare(
-    'SELECT COUNT(*) as total, SUM(CASE WHEN status = \'active\' THEN 1 ELSE 0 END) as active, SUM(CASE WHEN status = \'suspended\' THEN 1 ELSE 0 END) as suspended FROM tenants'
+    'SELECT COUNT(*) as total, SUM(CASE WHEN status = \'active\' THEN 1 ELSE 0 END) as active, SUM(CASE WHEN status = \'suspended\' THEN 1 ELSE 0 END) as suspended FROM nx_tenants'
   ).first();
 
   return jsonResponse({ tenants: result.results || [], stats });
@@ -92,14 +92,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Check slug uniqueness
-    const existing = await db.prepare('SELECT id FROM tenants WHERE slug = ?').bind(slug).first();
+    const existing = await db.prepare('SELECT id FROM nx_tenants WHERE slug = ?').bind(slug).first();
     if (existing) return errorResponse('Ya existe un negocio con ese slug/URL');
 
     const id = 'tn-' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
     const now = new Date().toISOString();
 
     await db.prepare(`
-      INSERT INTO tenants (id, name, slug, description, owner_name, owner_email, owner_phone, plan, max_users, max_products, created_at, updated_at)
+      INSERT INTO nx_tenants (id, name, slug, description, owner_name, owner_email, owner_phone, plan, max_users, max_products, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(id, name.trim(), slug, description || '', ownerName || '', ownerEmail || '', ownerPhone || '', plan || 'basic', maxUsers || 5, maxProducts || 500, now, now).run();
 
@@ -109,13 +109,13 @@ export async function POST(req: NextRequest) {
       const hashedPw = await hashPassword(ownerPassword);
       const userId = 'tu-' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
       await db.prepare(
-        'INSERT INTO tenant_users (id, tenant_id, username, password, full_name, role) VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO nx_tenant_users (id, tenant_id, username, password, full_name, role) VALUES (?, ?, ?, ?, ?, ?)'
       ).bind(userId, id, username, hashedPw, ownerName || 'Administrador', 'admin').run();
     }
 
     // Log activity
     await db.prepare(
-      'INSERT INTO activity_logs (id, user_id, user_type, action, details) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO nx_activity_logs (id, user_id, user_type, action, details) VALUES (?, ?, ?, ?, ?)'
     ).bind(
       'log-' + crypto.randomUUID().replace(/-/g, '').slice(0, 12),
       payload.userId, 'super_admin', 'tenant_created',
@@ -184,7 +184,7 @@ export async function PUT(req: NextRequest) {
     if (sets.length <= 1) return errorResponse('No hay campos para actualizar');
 
     values.push(id);
-    await db.prepare(`UPDATE tenants SET ${sets.join(', ')} WHERE id = ?`).bind(...values).run();
+    await db.prepare(`UPDATE nx_tenants SET ${sets.join(', ')} WHERE id = ?`).bind(...values).run();
 
     return jsonResponse({ success: true, message: 'Negocio actualizado' });
   } catch (error: any) {
@@ -203,15 +203,15 @@ export async function DELETE(req: NextRequest) {
   const { id } = await parseBody<{ id: string }>(req);
   if (!id) return errorResponse('ID del tenant es requerido');
 
-  const tenant = await db.prepare('SELECT name, slug FROM tenants WHERE id = ?').bind(id).first() as any;
+  const tenant = await db.prepare('SELECT name, slug FROM nx_tenants WHERE id = ?').bind(id).first() as any;
   if (!tenant) return errorResponse('Negocio no encontrado');
 
-  await db.prepare('DELETE FROM activity_logs WHERE tenant_id = ?').bind(id).run();
-  await db.prepare('DELETE FROM tenant_users WHERE tenant_id = ?').bind(id).run();
-  await db.prepare('DELETE FROM tenants WHERE id = ?').bind(id).run();
+  await db.prepare('DELETE FROM nx_activity_logs WHERE tenant_id = ?').bind(id).run();
+  await db.prepare('DELETE FROM nx_tenant_users WHERE tenant_id = ?').bind(id).run();
+  await db.prepare('DELETE FROM nx_tenants WHERE id = ?').bind(id).run();
 
   await db.prepare(
-    'INSERT INTO activity_logs (id, user_id, user_type, action, details) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO nx_activity_logs (id, user_id, user_type, action, details) VALUES (?, ?, ?, ?, ?)'
   ).bind(
     'log-' + crypto.randomUUID().replace(/-/g, '').slice(0, 12),
     payload.userId, 'super_admin', 'tenant_deleted',

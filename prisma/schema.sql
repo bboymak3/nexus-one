@@ -1,10 +1,11 @@
 -- Nexus One: Multi-Tenant SaaS Platform Schema
+-- Tablas con prefijo nx_ (comparten la D1 con el POS, cuyas tablas usan pos_)
 -- D1 (SQLite) compatible SQL
 
 -- ============================================
 -- SUPER ADMINS
 -- ============================================
-CREATE TABLE IF NOT EXISTS super_admins (
+CREATE TABLE IF NOT EXISTS nx_super_admins (
   id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
   username TEXT NOT NULL UNIQUE,
   password TEXT NOT NULL,
@@ -19,7 +20,7 @@ CREATE TABLE IF NOT EXISTS super_admins (
 -- ============================================
 -- TENANTS (Businesses)
 -- ============================================
-CREATE TABLE IF NOT EXISTS tenants (
+CREATE TABLE IF NOT EXISTS nx_tenants (
   id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
   name TEXT NOT NULL,
   slug TEXT NOT NULL UNIQUE,
@@ -39,13 +40,13 @@ CREATE TABLE IF NOT EXISTS tenants (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_tenants_slug ON tenants(slug);
-CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
+CREATE INDEX IF NOT EXISTS idx_nx_tenants_slug ON nx_tenants(slug);
+CREATE INDEX IF NOT EXISTS idx_nx_tenants_status ON nx_tenants(status);
 
 -- ============================================
 -- TENANT USERS (per-business users)
 -- ============================================
-CREATE TABLE IF NOT EXISTS tenant_users (
+CREATE TABLE IF NOT EXISTS nx_tenant_users (
   id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
   tenant_id TEXT NOT NULL,
   username TEXT NOT NULL,
@@ -57,15 +58,15 @@ CREATE TABLE IF NOT EXISTS tenant_users (
   last_login TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+  FOREIGN KEY (tenant_id) REFERENCES nx_tenants(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_tenant_users_tenant ON tenant_users(tenant_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_tenant_users_unique ON tenant_users(tenant_id, username);
+CREATE INDEX IF NOT EXISTS idx_nx_tenant_users_tenant ON nx_tenant_users(tenant_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nx_tenant_users_unique ON nx_tenant_users(tenant_id, username);
 
 -- ============================================
 -- ACTIVITY LOG
 -- ============================================
-CREATE TABLE IF NOT EXISTS activity_logs (
+CREATE TABLE IF NOT EXISTS nx_activity_logs (
   id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
   tenant_id TEXT,
   user_id TEXT,
@@ -75,15 +76,15 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   ip_address TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_activity_logs_tenant ON activity_logs(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_activity_logs_created ON activity_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_nx_activity_logs_tenant ON nx_activity_logs(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_nx_activity_logs_created ON nx_activity_logs(created_at);
 
 -- ============================================
 -- SEED: Default Super Admin
 -- La clave es un marcador no utilizable: en el primer login se reemplaza por el
 -- secreto SUPERADMIN_INITIAL_PASSWORD (ver src/app/api/auth/route.ts).
 -- ============================================
-INSERT OR IGNORE INTO super_admins (id, username, password, full_name, email)
+INSERT OR IGNORE INTO nx_super_admins (id, username, password, full_name, email)
 VALUES (
   'sa-root-001',
   'superadmin',

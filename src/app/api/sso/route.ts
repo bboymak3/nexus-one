@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     });
 
     await db.prepare(
-      'INSERT INTO activity_logs (id, tenant_id, user_id, user_type, action, details) VALUES (?, ?, ?, ?, ?, ?)'
+      'INSERT INTO nx_activity_logs (id, tenant_id, user_id, user_type, action, details) VALUES (?, ?, ?, ?, ?, ?)'
     ).bind(
       'log-' + crypto.randomUUID().replace(/-/g, '').slice(0, 12),
       tenant.id, user.id, 'tenant', 'pos_sso',

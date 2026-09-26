@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
     // ===== SUPER ADMIN LOGIN =====
     if (action === 'admin_login' || !action) {
-      const admins = await db.prepare('SELECT * FROM super_admins WHERE username = ? AND is_active = 1').bind(username).all();
+      const admins = await db.prepare('SELECT * FROM nx_super_admins WHERE username = ? AND is_active = 1').bind(username).all();
       const admin = admins.results?.[0] as any;
       if (!admin) return errorResponse('Credenciales invalidas');
 
@@ -45,13 +45,13 @@ export async function POST(req: NextRequest) {
           return errorResponse('Super admin sin clave inicial. Configure el secreto SUPERADMIN_INITIAL_PASSWORD (min 8 caracteres).', 503);
         }
         storedPassword = await hashPassword(initialPassword);
-        await db.prepare('UPDATE super_admins SET password = ? WHERE id = ?').bind(storedPassword, admin.id).run();
+        await db.prepare('UPDATE nx_super_admins SET password = ? WHERE id = ?').bind(storedPassword, admin.id).run();
       }
 
       const valid = await verifyPassword(password, storedPassword);
       if (!valid) return errorResponse('Credenciales invalidas');
 
-      await db.prepare('UPDATE super_admins SET last_login = datetime(\'now\') WHERE id = ?').bind(admin.id).run();
+      await db.prepare('UPDATE nx_super_admins SET last_login = datetime(\'now\') WHERE id = ?').bind(admin.id).run();
 
       const token = await createSessionToken({
         userId: admin.id,
@@ -72,12 +72,12 @@ export async function POST(req: NextRequest) {
       const { tenantSlug } = body as any;
       if (!tenantSlug) return errorResponse('Slug del negocio es requerido');
 
-      const tenants = await db.prepare('SELECT * FROM tenants WHERE slug = ? AND status = ?').bind(tenantSlug, 'active').all();
+      const tenants = await db.prepare('SELECT * FROM nx_tenants WHERE slug = ? AND status = ?').bind(tenantSlug, 'active').all();
       const tenant = tenants.results?.[0] as any;
       if (!tenant) return errorResponse('Negocio no encontrado o inactivo');
 
       const users = await db.prepare(
-        'SELECT * FROM tenant_users WHERE tenant_id = ? AND username = ? AND is_active = 1'
+        'SELECT * FROM nx_tenant_users WHERE tenant_id = ? AND username = ? AND is_active = 1'
       ).bind(tenant.id, username).all();
       const user = users.results?.[0] as any;
       if (!user) return errorResponse('Credenciales invalidas');
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
       const valid = await verifyPassword(password, user.password);
       if (!valid) return errorResponse('Credenciales invalidas');
 
-      await db.prepare('UPDATE tenant_users SET last_login = datetime(\'now\') WHERE id = ?').bind(user.id).run();
+      await db.prepare('UPDATE nx_tenant_users SET last_login = datetime(\'now\') WHERE id = ?').bind(user.id).run();
 
       const token = await createSessionToken({
         userId: user.id,
@@ -112,21 +112,21 @@ export async function POST(req: NextRequest) {
 
       const { tenantId, fullName, role } = body as any;
       if (!tenantId) return errorResponse('tenantId requerido');
-      const tenantExists = await db.prepare('SELECT id FROM tenants WHERE id = ?').bind(tenantId).first();
+      const tenantExists = await db.prepare('SELECT id FROM nx_tenants WHERE id = ?').bind(tenantId).first();
       if (!tenantExists) return errorResponse('Negocio no encontrado');
       if (password.length < 4) return errorResponse('La clave debe tener al menos 4 caracteres');
       if (role && !['admin', 'vendedor', 'cajero'].includes(role)) return errorResponse('Rol invalido');
 
       // Check if user already exists for this tenant
       const existing = await db.prepare(
-        'SELECT id FROM tenant_users WHERE tenant_id = ? AND username = ?'
+        'SELECT id FROM nx_tenant_users WHERE tenant_id = ? AND username = ?'
       ).bind(tenantId, username).all();
       if (existing.results?.length) return errorResponse('El usuario ya existe en este negocio');
 
       const hashedPw = await hashPassword(password);
       const id = 'tu-' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
       await db.prepare(
-        'INSERT INTO tenant_users (id, tenant_id, username, password, full_name, role) VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO nx_tenant_users (id, tenant_id, username, password, full_name, role) VALUES (?, ?, ?, ?, ?, ?)'
       ).bind(id, tenantId, username, hashedPw, fullName || username, role || 'admin').run();
 
       return jsonResponse({ success: true, userId: id });
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
       if (!newPassword || newPassword.length < 6) return errorResponse('La clave debe tener al menos 6 caracteres');
 
       const hashed = await hashPassword(newPassword);
-      await db.prepare('UPDATE super_admins SET password = ? WHERE id = ?').bind(hashed, payload.userId).run();
+      await db.prepare('UPDATE nx_super_admins SET password = ? WHERE id = ?').bind(hashed, payload.userId).run();
       return jsonResponse({ success: true, message: 'Clave actualizada' });
     }
 
@@ -163,7 +163,7 @@ export async function GET(req: NextRequest) {
 
   const db = getDB();
   if (db && payload.userType === 'super_admin') {
-    const admins = await db.prepare('SELECT id, username, full_name, email FROM super_admins WHERE id = ? AND is_active = 1').bind(payload.userId).all();
+    const admins = await db.prepare('SELECT id, username, full_name, email FROM nx_super_admins WHERE id = ? AND is_active = 1').bind(payload.userId).all();
     const admin = admins.results?.[0] as any;
     if (admin) {
       return jsonResponse({ valid: true, user: { id: admin.id, username: admin.username, fullName: admin.full_name, email: admin.email }, userType: 'super_admin' });
