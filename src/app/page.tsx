@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 export default function LoginPage() {
   const [mode, setMode] = useState<'landing' | 'admin' | 'tenant'>('landing');
   const [tenantSlug, setTenantSlug] = useState('');
+  // Si el slug ya viene en la URL (p. ej. /mi-negocio), no hace falta pedirlo: solo usuario y clave.
+  const [slugFromUrl, setSlugFromUrl] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,6 +22,7 @@ export default function LoginPage() {
     const match = path.match(/^\/([a-z0-9-]+)$/);
     if (match && match[1] !== 'admin' && match[1] !== 'api') {
       setTenantSlug(match[1]);
+      setSlugFromUrl(true);
       setMode('tenant');
     }
   }, []);
@@ -129,9 +132,9 @@ export default function LoginPage() {
           )}
 
           {/* Back button */}
-          {mode !== 'landing' && (
+          {mode !== 'landing' && !slugFromUrl && (
             <button
-              onClick={() => { setMode('landing'); setError(''); setTenantSlug(''); }}
+              onClick={() => { setMode('landing'); setError(''); setTenantSlug(''); setSlugFromUrl(false); }}
               className="flex items-center gap-2 text-sm mb-4 hover:text-white transition-colors"
               style={{color:'var(--text-muted)'}}
             >
@@ -144,8 +147,8 @@ export default function LoginPage() {
             {mode === 'admin' ? 'Iniciar Sesion - Admin' : 'Iniciar Sesion - Negocio'}
           </h2>
 
-          {/* Tenant Slug (for tenant mode) */}
-          {mode === 'tenant' && (
+          {/* Tenant Slug (solo si no vino ya en la URL, p. ej. entrando desde el landing) */}
+          {mode === 'tenant' && !slugFromUrl && (
             <div className="mb-4">
               <label className="block text-xs font-medium mb-1.5" style={{color:'var(--text-secondary)'}}>
                 URL del Negocio
@@ -217,7 +220,7 @@ export default function LoginPage() {
           )}
           {mode === 'tenant' && (
             <p className="text-center text-xs mt-4" style={{color:'var(--text-muted)'}}>
-              Ingresa la URL de tu negocio y tus credenciales
+              {slugFromUrl ? 'Ingresa tu usuario y clave' : 'Ingresa la URL de tu negocio y tus credenciales'}
             </p>
           )}
         </div>

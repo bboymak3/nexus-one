@@ -12,6 +12,9 @@ export default function TenantDashboard() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [openingPos, setOpeningPos] = useState(false);
+  const [showPosConfirm, setShowPosConfirm] = useState(false);
+
+  const SUPPORT_WHATSAPP = '584220550136';
 
   const addToast = useCallback((msg: string, type: string) => {
     const id = Date.now().toString();
@@ -56,7 +59,9 @@ export default function TenantDashboard() {
     })();
   }, [token, slug]);
 
-  const handleOpenPos = async () => {
+  const handleOpenPos = () => setShowPosConfirm(true);
+
+  const confirmOpenPos = async () => {
     setOpeningPos(true);
     try {
       const data = await api('/api/sso', { method: 'POST' });
@@ -64,6 +69,7 @@ export default function TenantDashboard() {
     } catch (e: any) {
       addToast(e.message || 'No se pudo abrir el POS', 'error');
       setOpeningPos(false);
+      setShowPosConfirm(false);
     }
   };
 
@@ -147,7 +153,7 @@ export default function TenantDashboard() {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
               </div>
               <div>
-                <p className="text-2xl font-bold" style={{color:'#10b981'}}>{tenant?.status === 'active' ? 'Activo' : 'Suspendido'}</p>
+                <p className="text-2xl font-bold" style={{color: tenant?.active !== false ? '#10b981' : '#ef4444'}}>{tenant?.active !== false ? 'Activo' : 'Vencido'}</p>
                 <p className="text-xs" style={{color:'var(--text-secondary)'}}>Estado</p>
               </div>
             </div>
@@ -196,6 +202,59 @@ export default function TenantDashboard() {
         </div>
 
       </main>
+
+      {/* Aviso de negocio + estado de licencia antes de abrir el POS */}
+      {showPosConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
+          <div className="glass rounded-2xl p-6 w-full max-w-sm">
+            {tenant?.active !== false ? (
+              <>
+                <div className="text-center mb-5">
+                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-3" style={{background:'rgba(139,92,246,0.15)'}}>
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/></svg>
+                  </div>
+                  <p className="text-sm" style={{color:'var(--text-secondary)'}}>Este es su negocio</p>
+                  <h2 className="text-lg font-bold mt-1">{tenant?.name}</h2>
+                  <span className="nexus-badge nexus-badge-green mt-2 inline-block">Licencia activa</span>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowPosConfirm(false)} className="nexus-btn nexus-btn-secondary flex-1 justify-center" disabled={openingPos}>
+                    Cancelar
+                  </button>
+                  <button onClick={confirmOpenPos} className="nexus-btn nexus-btn-primary flex-1 justify-center" disabled={openingPos}>
+                    {openingPos ? <span className="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full" /> : 'Aceptar'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-center mb-5">
+                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-3" style={{background:'rgba(239,68,68,0.15)'}}>
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                  </div>
+                  <p className="text-sm" style={{color:'var(--text-secondary)'}}>Su negocio</p>
+                  <h2 className="text-lg font-bold mt-1">{tenant?.name}</h2>
+                  <span className="nexus-badge nexus-badge-red mt-2 inline-block">Licencia vencida</span>
+                  <p className="text-sm mt-3" style={{color:'var(--text-secondary)'}}>{tenant?.reason}</p>
+                  <p className="text-xs mt-2" style={{color:'var(--text-muted)'}}>Contacte a servicio tecnico para renovar su licencia.</p>
+                </div>
+                <a
+                  href={`https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(`Hola, mi negocio "${tenant?.name}" tiene la licencia vencida y quiero renovarla.`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="nexus-btn w-full justify-center mb-3"
+                  style={{background:'#22c55e',color:'white'}}
+                >
+                  Contactar por WhatsApp
+                </a>
+                <button onClick={() => setShowPosConfirm(false)} className="nexus-btn nexus-btn-secondary w-full justify-center">
+                  Cerrar
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Toasts */}
       {toasts.map(t => (
