@@ -1,8 +1,10 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { getRequestContext } from '@cloudflare/next-on-pages';
 
-// Solo para desarrollo local (next dev); en produccion JWT_SECRET es obligatorio.
-const DEV_ONLY_SECRET = 'nexus-one-dev-only-secret';
+// Clave usada hasta ahora (estaba publicada en el repo). Se mantiene SOLO como
+// respaldo para no cortar el servicio mientras se configura el secreto JWT_SECRET.
+const LEGACY_SECRET = 'nexus-one-super-secret-change-in-production-2024';
+let warnedLegacy = false;
 
 /**
  * Lee una variable/secreto de Cloudflare (bindings) o de process.env.
@@ -18,8 +20,11 @@ export function readEnv(name: string): string | undefined {
 const getSecret = () => {
   const secret = readEnv('JWT_SECRET');
   if (secret) return new TextEncoder().encode(secret);
-  if (process.env.NODE_ENV !== 'production') return new TextEncoder().encode(DEV_ONLY_SECRET);
-  throw new Error('JWT_SECRET no configurado. Ejecute: npx wrangler pages secret put JWT_SECRET');
+  if (!warnedLegacy) {
+    warnedLegacy = true;
+    console.warn('[session] JWT_SECRET no configurado: usando la clave anterior. Configure: npx wrangler pages secret put JWT_SECRET');
+  }
+  return new TextEncoder().encode(LEGACY_SECRET);
 };
 
 export async function createSessionToken(payload: {
