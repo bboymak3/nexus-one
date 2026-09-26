@@ -3,7 +3,7 @@ import { getRequestContext } from '@cloudflare/next-on-pages';
 import { hashPassword, verifyPassword } from '@/lib/auth';
 import { createSessionToken, verifySessionToken, readEnv } from '@/lib/session';
 import { jsonResponse, errorResponse, unauthorizedResponse, parseBody } from '@/lib/response';
-import { getActiveTenantSession } from '@/lib/guards';
+import { getTenantSession } from '@/lib/guards';
 import { isExpired, formatDate } from '@/lib/subscription';
 
 export const runtime = 'edge';
@@ -75,10 +75,8 @@ export async function POST(req: NextRequest) {
 
       const tenant = await db.prepare('SELECT * FROM nx_tenants WHERE slug = ?').bind(tenantSlug).first() as any;
       if (!tenant) return errorResponse('Negocio no encontrado');
-      if (tenant.status !== 'active') return errorResponse('Este negocio esta suspendido. Contacte al administrador.', 403);
-      if (isExpired(tenant.subscription_expires_at)) {
-        return errorResponse(`La suscripcion de este negocio vencio el ${formatDate(tenant.subscription_expires_at)}. Contacte al administrador para renovarla.`, 403);
-      }
+      // El negocio suspendido o vencido SI puede entrar a su panel (para ver el aviso y
+      // renovar); solo se le bloquea abrir el punto de venta (ver /api/sso).
 
       const users = await db.prepare(
         'SELECT * FROM nx_tenant_users WHERE tenant_id = ? AND username = ? AND is_active = 1'
@@ -100,10 +98,22 @@ export async function POST(req: NextRequest) {
         role: user.role,
       });
 
+      const expired = isExpired(tenant.subscription_expires_at);
+      const active = tenant.status === 'active' && !expired;
+      const reason = tenant.status !== 'active'
+        ? 'Este negocio esta suspendido. Contacte al administrador.'
+        : expired
+          ? `La suscripcion de este negocio vencio el ${formatDate(tenant.subscription_expires_at)}.`
+          : '';
+
       return jsonResponse({
         token,
         user: { id: user.id, username: user.username, fullName: user.full_name, role: user.role },
-        tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+        tenant: {
+          id: tenant.id, name: tenant.name, slug: tenant.slug, status: tenant.status,
+          plan: tenant.plan, subscriptionExpiresAt: tenant.subscription_expires_at,
+          active, reason,
+        },
         userType: 'tenant',
       });
     }
@@ -175,14 +185,27 @@ export async function GET(req: NextRequest) {
   }
 
   if (db && payload.userType === 'tenant') {
-    // Un negocio suspendido o un usuario desactivado pierden el acceso aunque su token no haya vencido
-    const active = await getActiveTenantSession(db, payload);
-    if (active) {
-      const { user, tenant } = active;
+    // Un usuario desactivado pierde el acceso aunque su token no haya vencido. El negocio
+    // suspendido o vencido SI puede ver su panel (para el aviso de licencia); solo se le
+    // bloquea abrir el punto de venta (ver /api/sso, que usa getActiveTenantSession).
+    const session = await getTenantSession(db, payload);
+    if (session) {
+      const { user, tenant } = session;
+      const expired = isExpired(tenant.subscription_expires_at);
+      const active = tenant.status === 'active' && !expired;
+      const reason = tenant.status !== 'active'
+        ? 'Este negocio esta suspendido. Contacte al administrador.'
+        : expired
+          ? `La suscripcion de este negocio vencio el ${formatDate(tenant.subscription_expires_at)}.`
+          : '';
       return jsonResponse({
         valid: true,
         user: { id: user.id, username: user.username, full_name: user.full_name, fullName: user.full_name, role: user.role },
-        tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug, status: tenant.status, plan: tenant.plan },
+        tenant: {
+          id: tenant.id, name: tenant.name, slug: tenant.slug, status: tenant.status,
+          plan: tenant.plan, subscriptionExpiresAt: tenant.subscription_expires_at,
+          active, reason,
+        },
         userType: 'tenant',
       });
     }
