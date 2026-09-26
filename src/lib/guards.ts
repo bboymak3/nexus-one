@@ -1,3 +1,5 @@
+import { isExpired } from './subscription';
+
 /**
  * Devuelve el usuario y el negocio de una sesion de tenant solo si ambos siguen activos
  * y el usuario pertenece a ese negocio. Se consulta en cada peticion, por lo que
@@ -13,8 +15,8 @@ export async function getActiveTenantSession(
   ).bind(payload.userId, payload.tenantId).first();
   if (!user) return null;
   const tenant = await db.prepare(
-    "SELECT id, name, slug, status, plan, pos_url FROM nx_tenants WHERE id = ? AND status = 'active'"
+    "SELECT id, name, slug, status, plan, pos_url, subscription_expires_at FROM nx_tenants WHERE id = ? AND status = 'active'"
   ).bind(payload.tenantId).first();
-  if (!tenant) return null;
+  if (!tenant || isExpired(tenant.subscription_expires_at)) return null;
   return { user, tenant };
 }

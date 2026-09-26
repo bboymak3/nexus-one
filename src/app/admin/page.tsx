@@ -7,7 +7,14 @@ interface Tenant {
   plan: string; status: string; max_users: number; max_products: number;
   d1_database_id: string; d1_database_name: string; pos_url: string;
   user_count: number; created_at: string; updated_at: string;
+  billing_cycle: string; subscription_expires_at: string | null;
 }
+
+const CYCLE_LABEL: Record<string, string> = { monthly: 'Mensual', annual: 'Anual', none: 'Sin corte' };
+const isTenantExpired = (t: Tenant) => !!t.subscription_expires_at && new Date(t.subscription_expires_at).getTime() <= Date.now();
+const fmtDate = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('es-VE', { timeZone: 'America/Caracas' }) : '';
+// yyyy-mm-dd para <input type="date">
+const toDateInput = (iso: string | null) => iso ? new Date(iso).toISOString().slice(0, 10) : '';
 
 interface Toast { id: string; msg: string; type: string; }
 
@@ -23,7 +30,7 @@ export default function AdminDashboard() {
   const [detailUsers, setDetailUsers] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [form, setForm] = useState({ name: '', slug: '', description: '', ownerName: '', ownerEmail: '', ownerPhone: '', ownerPassword: '', plan: 'basic', maxUsers: '5', maxProducts: '500' });
+  const [form, setForm] = useState({ name: '', slug: '', description: '', ownerName: '', ownerEmail: '', ownerPhone: '', ownerPassword: '', plan: 'basic', maxUsers: '5', maxProducts: '500', billingCycle: 'monthly' });
   const [userForm, setUserForm] = useState({ tenantId: '', username: '', password: '', fullName: '', role: 'admin' });
 
   const addToast = useCallback((msg: string, type: string) => {
@@ -82,11 +89,12 @@ export default function AdminDashboard() {
           ownerEmail: form.ownerEmail, ownerPhone: form.ownerPhone,
           ownerPassword: form.ownerPassword || undefined,
           plan: form.plan, maxUsers: parseInt(form.maxUsers), maxProducts: parseInt(form.maxProducts),
+          billingCycle: form.billingCycle,
         }),
       });
       addToast(`Negocio "${form.name}" creado exitosamente`, 'success');
       setShowModal(false);
-      setForm({ name: '', slug: '', description: '', ownerName: '', ownerEmail: '', ownerPhone: '', ownerPassword: '', plan: 'basic', maxUsers: '5', maxProducts: '500' });
+      setForm({ name: '', slug: '', description: '', ownerName: '', ownerEmail: '', ownerPhone: '', ownerPassword: '', plan: 'basic', maxUsers: '5', maxProducts: '500', billingCycle: 'monthly' });
       loadTenants();
     } catch (e: any) { addToast(e.message, 'error'); }
   };
@@ -96,6 +104,27 @@ export default function AdminDashboard() {
     try {
       await api('/api/tenants', { method: 'PUT', body: JSON.stringify({ id: tenant.id, status: newStatus }) });
       addToast(`Negocio ${newStatus === 'active' ? 'activado' : 'suspendido'}`, 'success');
+      loadTenants();
+    } catch (e: any) { addToast(e.message, 'error'); }
+  };
+
+  // Renovar con un clic: +1 mes o +1 año segun el ciclo (desde el corte actual o desde hoy si ya vencio)
+  const handleRenew = async (tenant: Tenant) => {
+    try {
+      const data = await api('/api/tenants', { method: 'PUT', body: JSON.stringify({ id: tenant.id, renew: true }) });
+      addToast(`"${tenant.name}" renovado hasta ${fmtDate(data.subscriptionExpiresAt)}`, 'success');
+      if (showDetailModal?.id === tenant.id) setShowDetailModal({ ...showDetailModal, subscription_expires_at: data.subscriptionExpiresAt });
+      loadTenants();
+    } catch (e: any) { addToast(e.message, 'error'); }
+  };
+
+  // Programar el corte: ciclo (mensual/anual/sin corte) y fecha del proximo corte
+  const handleSaveSubscription = async (tenant: Tenant, billingCycle: string, expiryDate: string) => {
+    try {
+      const subscriptionExpiresAt = billingCycle === 'none' || !expiryDate ? null : new Date(expiryDate + 'T23:59:59-04:00').toISOString();
+      const data = await api('/api/tenants', { method: 'PUT', body: JSON.stringify({ id: tenant.id, billingCycle, subscriptionExpiresAt }) });
+      addToast('Suscripcion actualizada', 'success');
+      setShowDetailModal({ ...tenant, billing_cycle: billingCycle, subscription_expires_at: data.subscriptionExpiresAt });
       loadTenants();
     } catch (e: any) { addToast(e.message, 'error'); }
   };
@@ -175,7 +204,7 @@ export default function AdminDashboard() {
           {[
             { label: 'Total Negocios', value: stats?.total || 0, color: '#8b5cf6', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
             { label: 'Activos', value: stats?.active || 0, color: '#10b981', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
-            { label: 'Suspendidos', value: stats?.suspended || 0, color: '#f59e0b', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z' },
+            { label: 'Suspendidos / Vencidos', value: `${stats?.suspended || 0} / ${stats?.expired || 0}`, color: '#f59e0b', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z' },
             { label: 'Usuarios Total', value: tenants.reduce((a, t) => a + (t.user_count || 0), 0), color: '#3b82f6', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z' },
           ].map((s, i) => (
             <div key={i} className="glass rounded-xl p-4">
@@ -248,7 +277,10 @@ export default function AdminDashboard() {
                         <span className={`nexus-badge ${t.plan === 'premium' ? 'nexus-badge-purple' : t.plan === 'business' ? 'nexus-badge-blue' : 'nexus-badge-green'}`}>{t.plan}</span>
                       </td>
                       <td>
-                        <span className={`nexus-badge ${t.status === 'active' ? 'nexus-badge-green' : 'nexus-badge-red'}`}>{t.status}</span>
+                        <span className={`nexus-badge ${t.status !== 'active' ? 'nexus-badge-red' : isTenantExpired(t) ? 'nexus-badge-red' : 'nexus-badge-green'}`}>{t.status !== 'active' ? 'suspendido' : isTenantExpired(t) ? 'vencido' : 'activo'}</span>
+                        <div className="text-xs mt-1" style={{color: isTenantExpired(t) ? 'var(--danger, #ef4444)' : 'var(--text-muted)'}}>
+                          {t.subscription_expires_at ? `Corte: ${fmtDate(t.subscription_expires_at)}` : 'Sin corte'} · {CYCLE_LABEL[t.billing_cycle] || 'Mensual'}
+                        </div>
                       </td>
                       <td className="hidden lg:table-cell">{t.user_count || 0}/{t.max_users}</td>
                       <td>
@@ -265,6 +297,11 @@ export default function AdminDashboard() {
                               : <><polygon points="5 3 19 12 5 21 5 3"/></>
                             }</svg>
                           </button>
+                          {t.billing_cycle !== 'none' && (
+                            <button onClick={() => handleRenew(t)} className="nexus-btn nexus-btn-success nexus-btn-sm" title={`Renovar ${t.billing_cycle === 'annual' ? '+1 año' : '+1 mes'}`}>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+                            </button>
+                          )}
                           <button onClick={() => handleDeleteTenant(t)} className="nexus-btn nexus-btn-danger nexus-btn-sm" title="Eliminar">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                           </button>
@@ -322,6 +359,14 @@ export default function AdminDashboard() {
                     <option value="premium">Premium</option>
                   </select>
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{color:'var(--text-secondary)'}}>Corte (licencia del POS)</label>
+                <select className="nexus-input" value={form.billingCycle} onChange={e => setForm(p => ({...p, billingCycle: e.target.value}))}>
+                  <option value="monthly">Mensual (primer corte en 1 mes)</option>
+                  <option value="annual">Anual (primer corte en 1 año)</option>
+                  <option value="none">Sin corte</option>
+                </select>
               </div>
               <div className="p-3 rounded-lg" style={{background:'var(--surface-2)',border:'1px solid var(--border)'}}>
                 <p className="text-xs font-medium mb-2" style={{color:'var(--text-secondary)'}}>Credenciales del Administrador del Negocio</p>
@@ -398,6 +443,13 @@ export default function AdminDashboard() {
               <div><span style={{color:'var(--text-muted)'}}>Creado:</span> {new Date(showDetailModal.created_at).toLocaleDateString('es')}</div>
               <div><span style={{color:'var(--text-muted)'}}>Max Usuarios:</span> {showDetailModal.max_users}</div>
             </div>
+            <SubscriptionEditor
+              key={showDetailModal.id + (showDetailModal.subscription_expires_at || '') + showDetailModal.billing_cycle}
+              tenant={showDetailModal}
+              onSave={handleSaveSubscription}
+              onRenew={handleRenew}
+              onToggle={async (t) => { await handleToggleStatus(t); setShowDetailModal({ ...t, status: t.status === 'active' ? 'suspended' : 'active' }); }}
+            />
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-sm font-semibold">Usuarios del Negocio</h4>
@@ -431,6 +483,56 @@ export default function AdminDashboard() {
       {toasts.map(t => (
         <div key={t.id} className={`nexus-toast nexus-toast-${t.type}`}>{t.msg}</div>
       ))}
+    </div>
+  );
+}
+
+// Programar el corte del negocio: ciclo, fecha de corte, renovar y activar/suspender con un clic.
+function SubscriptionEditor({ tenant, onSave, onRenew, onToggle }: {
+  tenant: Tenant;
+  onSave: (t: Tenant, cycle: string, date: string) => void;
+  onRenew: (t: Tenant) => void;
+  onToggle: (t: Tenant) => void;
+}) {
+  const [cycle, setCycle] = useState(tenant.billing_cycle || 'monthly');
+  const [date, setDate] = useState(toDateInput(tenant.subscription_expires_at));
+  const expired = isTenantExpired(tenant);
+  return (
+    <div className="p-4 rounded-lg mb-5" style={{background:'var(--surface-2)',border:'1px solid var(--border)'}}>
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-sm font-semibold">Suscripcion / licencia del POS</h4>
+        <span className={`nexus-badge ${tenant.status !== 'active' || expired ? 'nexus-badge-red' : 'nexus-badge-green'}`}>
+          {tenant.status !== 'active' ? 'Suspendido' : expired ? 'Vencido' : 'Activo'}
+        </span>
+      </div>
+      <p className="text-xs mb-3" style={{color:'var(--text-muted)'}}>
+        {tenant.subscription_expires_at ? `Proximo corte: ${fmtDate(tenant.subscription_expires_at)}` : 'Sin fecha de corte'}. Al llegar el corte, el POS del negocio se bloquea hasta renovar.
+      </p>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{color:'var(--text-secondary)'}}>Ciclo</label>
+          <select className="nexus-input" value={cycle} onChange={e => setCycle(e.target.value)}>
+            <option value="monthly">Mensual</option>
+            <option value="annual">Anual</option>
+            <option value="none">Sin corte</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{color:'var(--text-secondary)'}}>Fecha de corte</label>
+          <input type="date" className="nexus-input" value={date} disabled={cycle === 'none'} onChange={e => setDate(e.target.value)} />
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button onClick={() => onSave(tenant, cycle, date)} className="nexus-btn nexus-btn-primary nexus-btn-sm">Guardar corte</button>
+        {tenant.billing_cycle !== 'none' && (
+          <button onClick={() => onRenew(tenant)} className="nexus-btn nexus-btn-success nexus-btn-sm">
+            Renovar {tenant.billing_cycle === 'annual' ? '+1 año' : '+1 mes'}
+          </button>
+        )}
+        <button onClick={() => onToggle(tenant)} className={`nexus-btn nexus-btn-sm ${tenant.status === 'active' ? 'nexus-btn-danger' : 'nexus-btn-success'}`}>
+          {tenant.status === 'active' ? 'Suspender' : 'Activar'}
+        </button>
+      </div>
     </div>
   );
 }

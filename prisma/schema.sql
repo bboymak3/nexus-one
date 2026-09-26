@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS nx_tenants (
   d1_database_name TEXT NOT NULL DEFAULT '',
   pos_url TEXT NOT NULL DEFAULT '',
   settings TEXT NOT NULL DEFAULT '{}',
+  billing_cycle TEXT NOT NULL DEFAULT 'monthly', -- monthly | annual | none
+  subscription_expires_at TEXT,                  -- fecha de corte (ISO); NULL = sin corte
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
