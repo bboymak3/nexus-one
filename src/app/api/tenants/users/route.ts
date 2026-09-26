@@ -3,6 +3,9 @@ import { getRequestContext } from '@cloudflare/next-on-pages';
 import { verifySessionToken } from '@/lib/session';
 import { hashPassword } from '@/lib/auth';
 import { jsonResponse, errorResponse, unauthorizedResponse, parseBody } from '@/lib/response';
+import { getActiveTenantSession } from '@/lib/guards';
+
+const VALID_ROLES = ['admin', 'vendedor', 'cajero'];
 
 export const runtime = 'edge';
 
@@ -27,8 +30,9 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const tenantId = url.searchParams.get('tenantId') || payload.tenantId;
 
-  if (payload.userType !== 'super_admin' && payload.tenantId !== tenantId) {
-    return unauthorizedResponse();
+  if (payload.userType !== 'super_admin') {
+    const active = await getActiveTenantSession(db, payload);
+    if (!active || active.tenant.id !== tenantId) return unauthorizedResponse();
   }
 
   if (!tenantId) return errorResponse('tenantId es requerido');
@@ -59,12 +63,24 @@ export async function POST(req: NextRequest) {
       role: string;
     }>(req);
 
-    const { tenantId, username, password, fullName, role } = body;
+    const { tenantId, username, password, fullName } = body;
+    const role = body.role || 'cajero';
 
     if (!tenantId || !username || !password) {
       return errorResponse('tenantId, username y password son requeridos');
     }
     if (password.length < 4) return errorResponse('La clave debe tener al menos 4 caracteres');
+    if (!/^[a-zA-Z0-9._-]{3,50}$/.test(username)) {
+      return errorResponse('Usuario invalido: 3-50 caracteres (letras, numeros, punto, guion)');
+    }
+    if (!VALID_ROLES.includes(role)) return errorResponse(`Rol invalido. Use: ${VALID_ROLES.join(', ')}`);
+
+    // Un usuario de negocio solo puede crear usuarios en SU negocio y debe ser admin
+    if (payload.userType !== 'super_admin') {
+      const active = await getActiveTenantSession(db, payload);
+      if (!active || active.tenant.id !== tenantId) return unauthorizedResponse();
+      if (active.user.role !== 'admin') return errorResponse('Solo un administrador del negocio puede crear usuarios', 403);
+    }
 
     const tenant = await db.prepare('SELECT id FROM tenants WHERE id = ?').bind(tenantId).first();
     if (!tenant) return errorResponse('Negocio no encontrado');
@@ -85,11 +101,11 @@ export async function POST(req: NextRequest) {
 
     await db.prepare(
       'INSERT INTO tenant_users (id, tenant_id, username, password, full_name, role) VALUES (?, ?, ?, ?, ?, ?)'
-    ).bind(id, tenantId, username, hashedPw, fullName || username, role || 'cajero').run();
+    ).bind(id, tenantId, username, hashedPw, fullName || username, role).run();
 
     return jsonResponse({
       success: true,
-      user: { id, username, fullName: fullName || username, role: role || 'cajero' },
+      user: { id, username, fullName: fullName || username, role },
     }, 201);
   } catch (error: any) {
     return errorResponse(error.message || 'Error al crear usuario', 500);

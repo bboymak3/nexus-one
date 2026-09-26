@@ -25,7 +25,6 @@ export default function AdminDashboard() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [form, setForm] = useState({ name: '', slug: '', description: '', ownerName: '', ownerEmail: '', ownerPhone: '', ownerPassword: '', plan: 'basic', maxUsers: '5', maxProducts: '500' });
   const [userForm, setUserForm] = useState({ tenantId: '', username: '', password: '', fullName: '', role: 'admin' });
-  const [creatingD1, setCreatingD1] = useState<string | null>(null);
 
   const addToast = useCallback((msg: string, type: string) => {
     const id = Date.now().toString();
@@ -108,20 +107,6 @@ export default function AdminDashboard() {
       addToast(`Negocio eliminado`, 'success');
       loadTenants();
     } catch (e: any) { addToast(e.message, 'error'); }
-  };
-
-  const handleCreateD1 = async (tenant: Tenant) => {
-    if (!confirm(`Crear base de datos D1 para "${tenant.name}"?`)) return;
-    setCreatingD1(tenant.id);
-    try {
-      const data = await api('/api/tenants/create-d1', {
-        method: 'POST',
-        body: JSON.stringify({ tenantId: tenant.id, tenantSlug: tenant.slug }),
-      });
-      addToast(data.message, 'success');
-      loadTenants();
-    } catch (e: any) { addToast(e.message, 'error'); }
-    finally { setCreatingD1(null); }
   };
 
   const handleViewDetail = async (tenant: Tenant) => {
@@ -243,7 +228,6 @@ export default function AdminDashboard() {
                     <th className="hidden sm:table-cell">Plan</th>
                     <th>Estado</th>
                     <th className="hidden lg:table-cell">Usuarios</th>
-                    <th className="hidden lg:table-cell">D1 DB</th>
                     <th>Acciones</th>
                   </tr>
                 </thead>
@@ -267,15 +251,6 @@ export default function AdminDashboard() {
                         <span className={`nexus-badge ${t.status === 'active' ? 'nexus-badge-green' : 'nexus-badge-red'}`}>{t.status}</span>
                       </td>
                       <td className="hidden lg:table-cell">{t.user_count || 0}/{t.max_users}</td>
-                      <td className="hidden lg:table-cell">
-                        {t.d1_database_id ? (
-                          <span className="text-xs" style={{color:'var(--success)'}}>Conectada</span>
-                        ) : (
-                          <button onClick={() => handleCreateD1(t)} disabled={creatingD1 === t.id} className="nexus-btn nexus-btn-sm nexus-btn-success">
-                            {creatingD1 === t.id ? <span className="animate-spin inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full" /> : 'Crear D1'}
-                          </button>
-                        )}
-                      </td>
                       <td>
                         <div className="flex items-center gap-1">
                           <button onClick={() => handleViewDetail(t)} className="nexus-btn nexus-btn-secondary nexus-btn-sm" title="Ver detalle">
@@ -393,7 +368,6 @@ export default function AdminDashboard() {
                   <option value="admin">Administrador</option>
                   <option value="cajero">Cajero</option>
                   <option value="vendedor">Vendedor</option>
-                  <option value="visor">Solo Lectura</option>
                 </select>
               </div>
             </div>
@@ -420,7 +394,7 @@ export default function AdminDashboard() {
               <div><span style={{color:'var(--text-muted)'}}>Dueno:</span> {showDetailModal.owner_name || 'N/A'}</div>
               <div><span style={{color:'var(--text-muted)'}}>Email:</span> {showDetailModal.owner_email || 'N/A'}</div>
               <div><span style={{color:'var(--text-muted)'}}>Telefono:</span> {showDetailModal.owner_phone || 'N/A'}</div>
-              <div className="col-span-2"><span style={{color:'var(--text-muted)'}}>D1 DB:</span> {showDetailModal.d1_database_name || <span style={{color:'var(--text-muted)'}}>Sin base de datos</span>}</div>
+              <div className="col-span-2"><span style={{color:'var(--text-muted)'}}>POS:</span> {showDetailModal.pos_url || 'Compartido (MYECOMMERCE_URL)'}</div>
               <div><span style={{color:'var(--text-muted)'}}>Creado:</span> {new Date(showDetailModal.created_at).toLocaleDateString('es')}</div>
               <div><span style={{color:'var(--text-muted)'}}>Max Usuarios:</span> {showDetailModal.max_users}</div>
             </div>

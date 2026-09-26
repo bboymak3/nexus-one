@@ -174,6 +174,13 @@ export async function PUT(req: NextRequest) {
       values.push(JSON.stringify(updates.settings));
     }
 
+    if (updates.status !== undefined && !['active', 'suspended'].includes(updates.status)) {
+      return errorResponse('Estado invalido. Use: active, suspended');
+    }
+    if (updates.plan !== undefined && !['basic', 'business', 'premium'].includes(updates.plan)) {
+      return errorResponse('Plan invalido. Use: basic, business, premium');
+    }
+
     if (sets.length <= 1) return errorResponse('No hay campos para actualizar');
 
     values.push(id);

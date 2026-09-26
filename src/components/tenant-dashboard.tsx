@@ -11,6 +11,7 @@ export default function TenantDashboard() {
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [openingPos, setOpeningPos] = useState(false);
 
   const addToast = useCallback((msg: string, type: string) => {
     const id = Date.now().toString();
@@ -54,6 +55,17 @@ export default function TenantDashboard() {
       finally { setLoading(false); }
     })();
   }, [token, slug]);
+
+  const handleOpenPos = async () => {
+    setOpeningPos(true);
+    try {
+      const data = await api('/api/sso', { method: 'POST' });
+      window.location.href = data.url;
+    } catch (e: any) {
+      addToast(e.message || 'No se pudo abrir el POS', 'error');
+      setOpeningPos(false);
+    }
+  };
 
   const handleLogout = () => {
     document.cookie = 'session_token=; path=/; max-age=0';
@@ -104,9 +116,14 @@ export default function TenantDashboard() {
                 Panel de gestion de <strong>{tenant?.name}</strong>
               </p>
             </div>
-            <div className="flex items-center gap-2 text-xs" style={{color:'var(--text-muted)'}}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-              URL de acceso: <strong style={{color:'var(--accent)'}}>{typeof window !== 'undefined' ? window.location.origin : ''}/{slug}</strong>
+            <div className="flex flex-col items-start sm:items-end gap-2">
+              <button onClick={handleOpenPos} disabled={openingPos} className="nexus-btn nexus-btn-primary">
+                {openingPos ? <span className="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full" /> : 'Abrir Punto de Venta'}
+              </button>
+              <div className="flex items-center gap-2 text-xs" style={{color:'var(--text-muted)'}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                URL de acceso: <strong style={{color:'var(--accent)'}}>{typeof window !== 'undefined' ? window.location.origin : ''}/{slug}</strong>
+              </div>
             </div>
           </div>
         </div>
@@ -141,8 +158,8 @@ export default function TenantDashboard() {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
               </div>
               <div>
-                <p className="text-2xl font-bold" style={{color:'#3b82f6'}}>{tenant?.d1_database_id ? 'Conectada' : 'Pendiente'}</p>
-                <p className="text-xs" style={{color:'var(--text-secondary)'}}>Base de Datos</p>
+                <p className="text-2xl font-bold" style={{color:'#3b82f6'}}>{user?.role === 'admin' ? 'Admin' : user?.role}</p>
+                <p className="text-xs" style={{color:'var(--text-secondary)'}}>Tu rol en el POS</p>
               </div>
             </div>
           </div>
@@ -178,18 +195,6 @@ export default function TenantDashboard() {
           )}
         </div>
 
-        {/* Connection Info */}
-        {!tenant?.d1_database_id && (
-          <div className="glass rounded-xl p-5 mt-6 animate-fade" style={{borderColor:'rgba(245,158,11,0.3)'}}>
-            <div className="flex items-start gap-3">
-              <svg className="flex-shrink-0 mt-0.5" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <div>
-                <h3 className="font-semibold text-sm mb-1" style={{color:'#f59e0b'}}>Base de datos no configurada</h3>
-                <p className="text-xs" style={{color:'var(--text-secondary)'}}>El super administrador debe crear y asignar una base de datos D1 para este negocio. Contacta al administrador del sistema para completar la configuracion.</p>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
 
       {/* Toasts */}

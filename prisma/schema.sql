@@ -80,7 +80,8 @@ CREATE INDEX IF NOT EXISTS idx_activity_logs_created ON activity_logs(created_at
 
 -- ============================================
 -- SEED: Default Super Admin
--- Password: admin123 (hashed with PBKDF2-SHA256)
+-- La clave es un marcador no utilizable: en el primer login se reemplaza por el
+-- secreto SUPERADMIN_INITIAL_PASSWORD (ver src/app/api/auth/route.ts).
 -- ============================================
 INSERT OR IGNORE INTO super_admins (id, username, password, full_name, email)
 VALUES (
