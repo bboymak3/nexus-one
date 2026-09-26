@@ -3,7 +3,7 @@ import { getRequestContext } from '@cloudflare/next-on-pages';
 import { verifySessionToken } from '@/lib/session';
 import { hashPassword } from '@/lib/auth';
 import { jsonResponse, errorResponse, unauthorizedResponse, parseBody } from '@/lib/response';
-import { getActiveTenantSession } from '@/lib/guards';
+import { getActiveTenantSession, getTenantSession } from '@/lib/guards';
 
 const VALID_ROLES = ['admin', 'vendedor', 'cajero'];
 
@@ -31,8 +31,10 @@ export async function GET(req: NextRequest) {
   const tenantId = url.searchParams.get('tenantId') || payload.tenantId;
 
   if (payload.userType !== 'super_admin') {
-    const active = await getActiveTenantSession(db, payload);
-    if (!active || active.tenant.id !== tenantId) return unauthorizedResponse();
+    // Solo lectura: un negocio suspendido o vencido igual puede ver su propia lista
+    // de usuarios en el panel (lo que no puede es abrir el punto de venta).
+    const session = await getTenantSession(db, payload);
+    if (!session || session.tenant.id !== tenantId) return unauthorizedResponse();
   }
 
   if (!tenantId) return errorResponse('tenantId es requerido');
