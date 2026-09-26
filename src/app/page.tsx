@@ -6,6 +6,8 @@ export default function LoginPage() {
   const [tenantSlug, setTenantSlug] = useState('');
   // Si el slug ya viene en la URL (p. ej. /mi-negocio), no hace falta pedirlo: solo usuario y clave.
   const [slugFromUrl, setSlugFromUrl] = useState(false);
+  // Campo opcional por si dos negocios comparten el mismo usuario (caso raro)
+  const [showSlugField, setShowSlugField] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -39,9 +41,10 @@ export default function LoginPage() {
     try {
       const body: any = { username, password };
       if (mode === 'tenant') {
-        if (!tenantSlug) { setError('Slug del negocio es requerido'); setLoading(false); return; }
         body.action = 'tenant_login';
-        body.tenantSlug = tenantSlug;
+        // Si el negocio ya se sabe (vino en la URL), se manda; si no, el servidor
+        // busca el usuario en todos los negocios.
+        if (tenantSlug) body.tenantSlug = tenantSlug;
       } else {
         body.action = 'admin_login';
       }
@@ -147,11 +150,12 @@ export default function LoginPage() {
             {mode === 'admin' ? 'Iniciar Sesion - Admin' : 'Iniciar Sesion - Negocio'}
           </h2>
 
-          {/* Tenant Slug (solo si no vino ya en la URL, p. ej. entrando desde el landing) */}
-          {mode === 'tenant' && !slugFromUrl && (
+          {/* Tenant Slug: no hace falta, el usuario se busca solo. Queda oculto salvo
+              que el propio usuario lo pida (dos negocios con el mismo usuario). */}
+          {mode === 'tenant' && !slugFromUrl && showSlugField && (
             <div className="mb-4">
               <label className="block text-xs font-medium mb-1.5" style={{color:'var(--text-secondary)'}}>
-                URL del Negocio
+                URL del Negocio (opcional)
               </label>
               <div className="flex rounded-lg overflow-hidden" style={{border:'1px solid var(--border)'}}>
                 <span className="flex items-center px-3 text-xs" style={{background:'var(--surface-2)',color:'var(--text-muted)'}}>/</span>
@@ -220,8 +224,18 @@ export default function LoginPage() {
           )}
           {mode === 'tenant' && (
             <p className="text-center text-xs mt-4" style={{color:'var(--text-muted)'}}>
-              {slugFromUrl ? 'Ingresa tu usuario y clave' : 'Ingresa la URL de tu negocio y tus credenciales'}
+              Ingresa tu usuario y clave
             </p>
+          )}
+          {mode === 'tenant' && !slugFromUrl && !showSlugField && (
+            <button
+              type="button"
+              onClick={() => setShowSlugField(true)}
+              className="block w-full text-center text-xs mt-2 hover:text-white transition-colors underline"
+              style={{color:'var(--text-muted)'}}
+            >
+              ¿Problemas para iniciar sesion?
+            </button>
           )}
         </div>
 

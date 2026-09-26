@@ -71,21 +71,36 @@ export async function POST(req: NextRequest) {
     // ===== TENANT USER LOGIN =====
     if (action === 'tenant_login') {
       const { tenantSlug } = body as any;
-      if (!tenantSlug) return errorResponse('Slug del negocio es requerido');
+      let tenant: any = null;
+      let user: any = null;
 
-      const tenant = await db.prepare('SELECT * FROM nx_tenants WHERE slug = ?').bind(tenantSlug).first() as any;
-      if (!tenant) return errorResponse('Negocio no encontrado');
+      if (tenantSlug) {
+        // Se sabe el negocio (vino en la URL /<slug>, o se escribio a mano)
+        tenant = await db.prepare('SELECT * FROM nx_tenants WHERE slug = ?').bind(tenantSlug).first();
+        if (!tenant) return errorResponse('Negocio no encontrado');
+        const users = await db.prepare(
+          'SELECT * FROM nx_tenant_users WHERE tenant_id = ? AND username = ? AND is_active = 1'
+        ).bind(tenant.id, username).all();
+        user = users.results?.[0] || null;
+        if (user && !(await verifyPassword(password, user.password))) user = null;
+      } else {
+        // No se pidio el negocio: se busca el usuario en todos los negocios
+        // (evita tener que escribir la URL del negocio para iniciar sesion).
+        const candidates = await db.prepare(
+          'SELECT * FROM nx_tenant_users WHERE username = ? AND is_active = 1'
+        ).bind(username).all();
+        for (const row of (candidates.results || []) as any[]) {
+          if (await verifyPassword(password, row.password)) {
+            user = row;
+            tenant = await db.prepare('SELECT * FROM nx_tenants WHERE id = ?').bind(row.tenant_id).first();
+            break;
+          }
+        }
+      }
+
+      if (!user || !tenant) return errorResponse('Credenciales invalidas');
       // El negocio suspendido o vencido SI puede entrar a su panel (para ver el aviso y
       // renovar); solo se le bloquea abrir el punto de venta (ver /api/sso).
-
-      const users = await db.prepare(
-        'SELECT * FROM nx_tenant_users WHERE tenant_id = ? AND username = ? AND is_active = 1'
-      ).bind(tenant.id, username).all();
-      const user = users.results?.[0] as any;
-      if (!user) return errorResponse('Credenciales invalidas');
-
-      const valid = await verifyPassword(password, user.password);
-      if (!valid) return errorResponse('Credenciales invalidas');
 
       await db.prepare('UPDATE nx_tenant_users SET last_login = datetime(\'now\') WHERE id = ?').bind(user.id).run();
 
