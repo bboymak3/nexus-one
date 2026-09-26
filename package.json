@@ -13,15 +13,15 @@
     "db:local": "npx wrangler d1 execute ok_db --local --file=./prisma/schema.sql"
   },
   "dependencies": {
-    "next": "15.1.0",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
     "@prisma/adapter-d1": "6.2.1",
-    "prisma": "6.2.1",
     "@prisma/client": "6.2.1",
+    "clsx": "2.1.1",
     "jose": "6.0.5",
     "lucide-react": "0.468.0",
-    "clsx": "2.1.1",
+    "next": "15.1.0",
+    "prisma": "6.2.1",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
     "tailwind-merge": "2.6.0"
   },
   "devDependencies": {
@@ -29,11 +29,12 @@
     "@types/node": "22.10.5",
     "@types/react": "19.0.7",
     "@types/react-dom": "19.0.3",
-    "typescript": "5.7.3",
-    "tailwindcss": "3.4.17",
-    "postcss": "8.4.49",
     "autoprefixer": "10.4.20",
-    "wrangler": "3.99.0",
-    "esbuild": "0.24.2"
+    "esbuild": "0.24.2",
+    "postcss": "8.4.49",
+    "tailwindcss": "3.4.17",
+    "typescript": "5.7.3",
+    "vercel": "39.3.0",
+    "wrangler": "3.99.0"
   }
 }
