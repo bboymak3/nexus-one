@@ -8,9 +8,9 @@
     "pages:build": "npx @cloudflare/next-on-pages",
     "pages:deploy": "npm run pages:build && npx wrangler pages deploy .vercel/output/static --project-name=nexus-one",
     "preview": "npx wrangler pages dev .vercel/output/static",
-    "db:create": "npx wrangler d1 create nexus-one-db",
-    "db:schema": "npx wrangler d1 execute nexus-one-db --remote --file=./prisma/schema.sql",
-    "db:local": "npx wrangler d1 execute nexus-one-db --local --file=./prisma/schema.sql"
+    "db:create": "npx wrangler d1 create ok_db",
+    "db:schema": "npx wrangler d1 execute ok_db --remote --file=./prisma/schema.sql",
+    "db:local": "npx wrangler d1 execute ok_db --local --file=./prisma/schema.sql"
   },
   "dependencies": {
     "next": "15.1.0",

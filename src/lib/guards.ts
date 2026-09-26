@@ -9,11 +9,11 @@ export async function getActiveTenantSession(
 ): Promise<{ user: any; tenant: any } | null> {
   if (!payload || payload.userType !== 'tenant' || !payload.tenantId) return null;
   const user = await db.prepare(
-    'SELECT id, tenant_id, username, full_name, role FROM tenant_users WHERE id = ? AND tenant_id = ? AND is_active = 1'
+    'SELECT id, tenant_id, username, full_name, role FROM nx_tenant_users WHERE id = ? AND tenant_id = ? AND is_active = 1'
   ).bind(payload.userId, payload.tenantId).first();
   if (!user) return null;
   const tenant = await db.prepare(
-    "SELECT id, name, slug, status, plan, pos_url FROM tenants WHERE id = ? AND status = 'active'"
+    "SELECT id, name, slug, status, plan, pos_url FROM nx_tenants WHERE id = ? AND status = 'active'"
   ).bind(payload.tenantId).first();
   if (!tenant) return null;
   return { user, tenant };

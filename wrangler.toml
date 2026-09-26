@@ -5,9 +5,9 @@ name = "nexus-one"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
 
-# D1 Database binding - will be updated after creation
+# D1 compartida por nexus-one (tablas nx_) y el POS (tablas pos_), cuenta bboymak3
 d1_databases = [
-  { binding = "DB", database_name = "nexus-one-db", database_id = "4a9ccee2-1c00-4db3-bcbd-a9fc218a38fb" }
+  { binding = "DB", database_name = "ok_db", database_id = "f4939ecd-22e5-4f7c-b2f5-8861997cb042" }
 ]
 
 [vars]

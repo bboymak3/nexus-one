@@ -27,15 +27,15 @@ export async function GET(
   if (!db) return errorResponse('Database not available');
 
   const { id } = await params;
-  const tenant = await db.prepare('SELECT * FROM tenants WHERE id = ?').bind(id).first() as any;
+  const tenant = await db.prepare('SELECT * FROM nx_tenants WHERE id = ?').bind(id).first() as any;
   if (!tenant) return errorResponse('Negocio no encontrado', 404);
 
   const users = await db.prepare(
-    'SELECT id, username, full_name, role, is_active, last_login, created_at FROM tenant_users WHERE tenant_id = ? ORDER BY created_at'
+    'SELECT id, username, full_name, role, is_active, last_login, created_at FROM nx_tenant_users WHERE tenant_id = ? ORDER BY created_at'
   ).bind(id).all();
 
   const logs = await db.prepare(
-    'SELECT * FROM activity_logs WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 20'
+    'SELECT * FROM nx_activity_logs WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 20'
   ).bind(id).all();
 
   return jsonResponse({ tenant, users: users.results || [], logs: logs.results || [] });
