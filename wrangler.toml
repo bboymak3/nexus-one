@@ -12,8 +12,10 @@ d1_databases = [
 
 [vars]
 NODE_ENV = "production"
-# URL publica del POS compartido (MyeCommerce), sin barra final
-# MYECOMMERCE_URL = "https://myecommerce-pos.pages.dev"
+# URL publica del POS compartido (MyeCommerce), sin barra final.
+# Va aqui y no en el panel: con wrangler.toml, Cloudflare ignora las variables
+# normales definidas en el panel (los secretos si se respetan).
+MYECOMMERCE_URL = "https://myecommerce-pos-7g0.pages.dev"
 
 # Secretos (NO van en este archivo). Mientras JWT_SECRET no exista se usa la clave
 # anterior; el boton "Abrir Punto de Venta" requiere NEXUS_SSO_SECRET. Configurar con:
