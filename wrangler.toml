@@ -12,4 +12,11 @@ d1_databases = [
 
 [vars]
 NODE_ENV = "production"
-JWT_SECRET = "nexus-one-super-secret-change-in-production-2024"
+# URL publica del POS compartido (MyeCommerce), sin barra final
+# MYECOMMERCE_URL = "https://myecommerce-pos.pages.dev"
+
+# Secretos (NO van en este archivo). Mientras JWT_SECRET no exista se usa la clave
+# anterior; el boton "Abrir Punto de Venta" requiere NEXUS_SSO_SECRET. Configurar con:
+#   npx wrangler pages secret put JWT_SECRET --project-name=nexus-one
+#   npx wrangler pages secret put NEXUS_SSO_SECRET --project-name=nexus-one            (mismo valor que en myecommerce-pos)
+#   npx wrangler pages secret put SUPERADMIN_INITIAL_PASSWORD --project-name=nexus-one (solo para el primer login)

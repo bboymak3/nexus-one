@@ -4,7 +4,8 @@ import { verifySessionToken, getSessionFromRequest } from './lib/session';
 export { getSessionFromRequest };
 
 export const config = {
-  matcher: ['/admin/:path*', '/[slug]/dashboard/:path*'],
+  // '/[slug]/...' no es un patron valido en el matcher; se usa el parametro ':slug'
+  matcher: ['/admin/:path*', '/:slug/dashboard/:path*'],
 };
 
 export async function middleware(request: NextRequest) {

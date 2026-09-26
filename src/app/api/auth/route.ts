@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server';
 import { getRequestContext } from '@cloudflare/next-on-pages';
 import { hashPassword, verifyPassword } from '@/lib/auth';
-import { createSessionToken, verifySessionToken } from '@/lib/session';
+import { createSessionToken, verifySessionToken, readEnv } from '@/lib/session';
 import { jsonResponse, errorResponse, unauthorizedResponse, parseBody } from '@/lib/response';
+import { getActiveTenantSession } from '@/lib/guards';
 
 export const runtime = 'edge';
 
@@ -34,10 +35,16 @@ export async function POST(req: NextRequest) {
       const admin = admins.results?.[0] as any;
       if (!admin) return errorResponse('Credenciales invalidas');
 
-      // First-time setup: if password is the placeholder, set the real one
+      // Primera configuracion: la semilla trae una clave marcador (no utilizable).
+      // La clave inicial se toma del secreto SUPERADMIN_INITIAL_PASSWORD; ya no
+      // existe una clave por defecto conocida (antes: admin123).
       let storedPassword = admin.password;
       if (storedPassword.includes('fixedsalt')) {
-        storedPassword = await hashPassword('admin123');
+        const initialPassword = readEnv('SUPERADMIN_INITIAL_PASSWORD');
+        if (!initialPassword || initialPassword.length < 8) {
+          return errorResponse('Super admin sin clave inicial. Configure el secreto SUPERADMIN_INITIAL_PASSWORD (min 8 caracteres).', 503);
+        }
+        storedPassword = await hashPassword(initialPassword);
         await db.prepare('UPDATE super_admins SET password = ? WHERE id = ?').bind(storedPassword, admin.id).run();
       }
 
@@ -97,10 +104,18 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ===== CREATE TENANT USER (first user when creating tenant) =====
+    // ===== CREATE TENANT USER (solo super admin) =====
     if (action === 'create_tenant_user') {
+      const tokenStr = req.headers.get('authorization')?.replace('Bearer ', '');
+      const session = tokenStr ? await verifySessionToken(tokenStr) : null;
+      if (!session || session.userType !== 'super_admin') return unauthorizedResponse();
+
       const { tenantId, fullName, role } = body as any;
       if (!tenantId) return errorResponse('tenantId requerido');
+      const tenantExists = await db.prepare('SELECT id FROM tenants WHERE id = ?').bind(tenantId).first();
+      if (!tenantExists) return errorResponse('Negocio no encontrado');
+      if (password.length < 4) return errorResponse('La clave debe tener al menos 4 caracteres');
+      if (role && !['admin', 'vendedor', 'cajero'].includes(role)) return errorResponse('Rol invalido');
 
       // Check if user already exists for this tenant
       const existing = await db.prepare(
@@ -148,7 +163,7 @@ export async function GET(req: NextRequest) {
 
   const db = getDB();
   if (db && payload.userType === 'super_admin') {
-    const admins = await db.prepare('SELECT id, username, full_name, email FROM super_admins WHERE id = ?').bind(payload.userId).all();
+    const admins = await db.prepare('SELECT id, username, full_name, email FROM super_admins WHERE id = ? AND is_active = 1').bind(payload.userId).all();
     const admin = admins.results?.[0] as any;
     if (admin) {
       return jsonResponse({ valid: true, user: { id: admin.id, username: admin.username, fullName: admin.full_name, email: admin.email }, userType: 'super_admin' });
@@ -156,12 +171,16 @@ export async function GET(req: NextRequest) {
   }
 
   if (db && payload.userType === 'tenant') {
-    const users = await db.prepare('SELECT id, username, full_name, role FROM tenant_users WHERE id = ?').bind(payload.userId).all();
-    const user = users.results?.[0] as any;
-    const tenants = await db.prepare('SELECT id, name, slug, status FROM tenants WHERE id = ?').bind(payload.tenantId).all();
-    const tenant = tenants.results?.[0] as any;
-    if (user) {
-      return jsonResponse({ valid: true, user, tenant, userType: 'tenant' });
+    // Un negocio suspendido o un usuario desactivado pierden el acceso aunque su token no haya vencido
+    const active = await getActiveTenantSession(db, payload);
+    if (active) {
+      const { user, tenant } = active;
+      return jsonResponse({
+        valid: true,
+        user: { id: user.id, username: user.username, full_name: user.full_name, fullName: user.full_name, role: user.role },
+        tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug, status: tenant.status, plan: tenant.plan },
+        userType: 'tenant',
+      });
     }
   }
 
