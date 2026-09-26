@@ -44,18 +44,24 @@ export default function TenantDashboard() {
   useEffect(() => {
     if (!token || !slug) return;
     (async () => {
+      // Sesion invalida o de otro negocio: de vuelta al login. Cualquier otra falla
+      // (p. ej. no poder listar usuarios de un negocio suspendido) no debe sacar al
+      // usuario de su propio panel, solo se ve sin esa lista.
+      let authData: any;
       try {
-        const authData = await api('/api/auth');
+        authData = await api('/api/auth');
         if (authData.userType !== 'tenant' || authData.tenant?.slug !== slug) {
           window.location.href = `/${slug}`; return;
         }
-        setUser(authData.user);
-        setTenant(authData.tenant);
-        // Load users
+      } catch { window.location.href = `/${slug}`; return; }
+
+      setUser(authData.user);
+      setTenant(authData.tenant);
+      try {
         const usersData = await api(`/api/tenants/users?tenantId=${authData.tenant.id}`);
         setUsers(usersData.users || []);
-      } catch { window.location.href = `/${slug}`; }
-      finally { setLoading(false); }
+      } catch { /* negocio suspendido u otro error: se ve el panel igual, sin la lista */ }
+      setLoading(false);
     })();
   }, [token, slug]);
 
