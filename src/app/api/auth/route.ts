@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { normalizeTenantRole } from '@/lib/cajero-permissions';
 import { getRequestContext } from '@cloudflare/next-on-pages';
 import { hashPassword, verifyPassword } from '@/lib/auth';
 import { createSessionToken, verifySessionToken, readEnv } from '@/lib/session';
@@ -156,7 +157,7 @@ export async function POST(req: NextRequest) {
       const id = 'tu-' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
       await db.prepare(
         'INSERT INTO nx_tenant_users (id, tenant_id, username, password, full_name, role) VALUES (?, ?, ?, ?, ?, ?)'
-      ).bind(id, tenantId, username, hashedPw, fullName || username, role || 'admin').run();
+      ).bind(id, tenantId, username, hashedPw, fullName || username, role ? normalizeTenantRole(role) : 'admin').run();
 
       return jsonResponse({ success: true, userId: id });
     }
