@@ -1,6 +1,5 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { CAJERO_PERMISSIONS, cajeroPermissionsFromSettings } from '@/lib/cajero-permissions';
 
 interface Tenant {
   id: string; name: string; slug: string; description: string;
@@ -9,7 +8,6 @@ interface Tenant {
   d1_database_id: string; d1_database_name: string; pos_url: string;
   user_count: number; created_at: string; updated_at: string;
   billing_cycle: string; subscription_expires_at: string | null;
-  settings?: string;
 }
 
 const CYCLE_LABEL: Record<string, string> = { monthly: 'Mensual', annual: 'Anual', none: 'Sin corte' };
@@ -29,7 +27,6 @@ export default function AdminDashboard() {
   const [showModal, setShowModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState<Tenant | null>(null);
-  const [permsTenant, setPermsTenant] = useState<Tenant | null>(null);
   const [detailUsers, setDetailUsers] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -138,15 +135,6 @@ export default function AdminDashboard() {
       await api('/api/tenants', { method: 'DELETE', body: JSON.stringify({ id: tenant.id }) });
       addToast(`Negocio eliminado`, 'success');
       loadTenants();
-    } catch (e: any) { addToast(e.message, 'error'); }
-  };
-
-  const handleSavePerms = async (tenant: Tenant, perms: Record<string, boolean>) => {
-    try {
-      await api('/api/tenants', { method: 'PUT', body: JSON.stringify({ id: tenant.id, cajeroPermissions: perms }) });
-      addToast(`Permisos del cajero guardados para ${tenant.name}`, 'success');
-      setPermsTenant(null);
-      loadTenants(search);
     } catch (e: any) { addToast(e.message, 'error'); }
   };
 
@@ -303,9 +291,6 @@ export default function AdminDashboard() {
                           <button onClick={() => { setUserForm(prev => ({...prev, tenantId: t.id})); setShowUserModal(true); }} className="nexus-btn nexus-btn-secondary nexus-btn-sm" title="Agregar usuario">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
                           </button>
-                          <button onClick={() => setPermsTenant(t)} className="nexus-btn nexus-btn-secondary nexus-btn-sm" title="Permisos del cajero">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
-                          </button>
                           <button onClick={() => handleToggleStatus(t)} className={`nexus-btn nexus-btn-sm ${t.status === 'active' ? 'nexus-btn-danger' : 'nexus-btn-success'}`} title={t.status === 'active' ? 'Suspender' : 'Activar'}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">{t.status === 'active'
                               ? <><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></>
@@ -404,11 +389,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Permisos del cajero */}
-      {permsTenant && (
-        <CajeroPermissionsModal tenant={permsTenant} onClose={() => setPermsTenant(null)} onSave={handleSavePerms} />
-      )}
-
       {/* Create User Modal */}
       {showUserModal && (
         <div className="nexus-overlay" onClick={() => setShowUserModal(false)}>
@@ -431,7 +411,7 @@ export default function AdminDashboard() {
                 <label className="block text-xs font-medium mb-1" style={{color:'var(--text-secondary)'}}>Rol</label>
                 <select className="nexus-input" value={userForm.role} onChange={e => setUserForm(p => ({...p, role: e.target.value}))}>
                   <option value="admin">Administrador</option>
-                  <option value="cajero">Cajero (permisos segun "Permisos del cajero")</option>
+                  <option value="cajero">Cajero</option>
                 </select>
               </div>
             </div>
@@ -473,7 +453,6 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-sm font-semibold">Usuarios del Negocio</h4>
                 <button onClick={() => { setUserForm(prev => ({...prev, tenantId: showDetailModal!.id})); setShowDetailModal(null); setShowUserModal(true); }} className="nexus-btn nexus-btn-primary nexus-btn-sm">+ Usuario</button>
-                <button onClick={() => { setPermsTenant(showDetailModal); setShowDetailModal(null); }} className="nexus-btn nexus-btn-secondary nexus-btn-sm">Permisos del cajero</button>
               </div>
               {detailUsers.length === 0 ? (
                 <p className="text-sm" style={{color:'var(--text-muted)'}}>No hay usuarios en este negocio</p>
@@ -552,48 +531,6 @@ function SubscriptionEditor({ tenant, onSave, onRenew, onToggle }: {
         <button onClick={() => onToggle(tenant)} className={`nexus-btn nexus-btn-sm ${tenant.status === 'active' ? 'nexus-btn-danger' : 'nexus-btn-success'}`}>
           {tenant.status === 'active' ? 'Suspender' : 'Activar'}
         </button>
-      </div>
-    </div>
-  );
-}
-
-// Casillas con las tareas que puede hacer el cajero del negocio en el POS.
-// Se guardan en nx_tenants.settings.cajeroPermissions; el POS las aplica en ~30 s.
-function CajeroPermissionsModal({ tenant, onClose, onSave }: {
-  tenant: Tenant;
-  onClose: () => void;
-  onSave: (tenant: Tenant, perms: Record<string, boolean>) => void;
-}) {
-  const [perms, setPerms] = useState<Record<string, boolean>>(() => cajeroPermissionsFromSettings(tenant.settings));
-  const [saving, setSaving] = useState(false);
-  const setAll = (value: boolean) => setPerms(Object.fromEntries(CAJERO_PERMISSIONS.map(p => [p.key, value])));
-  const resetDefaults = () => setPerms(Object.fromEntries(CAJERO_PERMISSIONS.map(p => [p.key, p.default])));
-  return (
-    <div className="nexus-overlay" onClick={onClose}>
-      <div className="nexus-modal p-6" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold">Permisos del cajero</h3>
-        <p className="text-xs mt-1 mb-4" style={{color:'var(--text-muted)'}}>
-          {tenant.name}: tareas que pueden hacer los cajeros en el punto de venta. El administrador del negocio siempre puede todo.
-        </p>
-        <div className="space-y-1.5 max-h-[55vh] overflow-y-auto pr-1">
-          {CAJERO_PERMISSIONS.map(p => (
-            <label key={p.key} className="flex items-start gap-3 rounded-lg px-3 py-2 cursor-pointer" style={{background:'var(--surface-2)'}}>
-              <input type="checkbox" className="mt-0.5" checked={!!perms[p.key]} onChange={e => setPerms(prev => ({ ...prev, [p.key]: e.target.checked }))} />
-              <span className="text-sm">{p.label}</span>
-            </label>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-2 mt-4 text-xs">
-          <button onClick={() => setAll(true)} className="nexus-btn nexus-btn-secondary nexus-btn-sm">Marcar todo</button>
-          <button onClick={() => setAll(false)} className="nexus-btn nexus-btn-secondary nexus-btn-sm">Desmarcar todo</button>
-          <button onClick={resetDefaults} className="nexus-btn nexus-btn-secondary nexus-btn-sm">Valores por defecto</button>
-        </div>
-        <div className="flex justify-end gap-2 mt-5">
-          <button onClick={onClose} className="nexus-btn nexus-btn-secondary">Cancelar</button>
-          <button disabled={saving} onClick={async () => { setSaving(true); await onSave(tenant, perms); setSaving(false); }} className="nexus-btn nexus-btn-primary">
-            {saving ? 'Guardando...' : 'Guardar permisos'}
-          </button>
-        </div>
       </div>
     </div>
   );

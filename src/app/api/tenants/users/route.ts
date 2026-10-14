@@ -4,8 +4,9 @@ import { verifySessionToken } from '@/lib/session';
 import { hashPassword } from '@/lib/auth';
 import { jsonResponse, errorResponse, unauthorizedResponse, parseBody } from '@/lib/response';
 import { getActiveTenantSession, getTenantSession } from '@/lib/guards';
-import { TENANT_ROLES, normalizeTenantRole } from '@/lib/cajero-permissions';
 
+// Roles: admin y cajero ('vendedor' se fusiono en cajero y se guarda como cajero)
+const VALID_ROLES = ['admin', 'cajero', 'vendedor'];
 
 export const runtime = 'edge';
 
@@ -66,9 +67,7 @@ export async function POST(req: NextRequest) {
     }>(req);
 
     const { tenantId, username, password, fullName } = body;
-    // Roles: admin y cajero ('vendedor' se fusiono en cajero)
-    if (body.role && !['admin', 'cajero', 'vendedor'].includes(body.role)) return errorResponse(`Rol invalido. Use: ${TENANT_ROLES.join(', ')}`);
-    const role = normalizeTenantRole(body.role || 'cajero');
+    const role = body.role === 'vendedor' ? 'cajero' : (body.role || 'cajero');
 
     if (!tenantId || !username || !password) {
       return errorResponse('tenantId, username y password son requeridos');
@@ -77,6 +76,7 @@ export async function POST(req: NextRequest) {
     if (!/^[a-zA-Z0-9._-]{3,50}$/.test(username)) {
       return errorResponse('Usuario invalido: 3-50 caracteres (letras, numeros, punto, guion)');
     }
+    if (!VALID_ROLES.includes(role)) return errorResponse('Rol invalido. Use: admin, cajero');
 
     // Un usuario de negocio solo puede crear usuarios en SU negocio y debe ser admin
     if (payload.userType !== 'super_admin') {
