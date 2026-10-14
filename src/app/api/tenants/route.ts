@@ -2,7 +2,6 @@ import { NextRequest } from 'next/server';
 import { getRequestContext } from '@cloudflare/next-on-pages';
 import { verifySessionToken } from '@/lib/session';
 import { hashPassword } from '@/lib/auth';
-import { sanitizeCajeroPermissions } from '@/lib/cajero-permissions';
 import { jsonResponse, errorResponse, unauthorizedResponse, parseBody, slugify } from '@/lib/response';
 import { isBillingCycle, addBillingCycle, renewedExpiry, type BillingCycle } from '@/lib/subscription';
 
@@ -157,11 +156,11 @@ export async function PUT(req: NextRequest) {
   if (!db) return errorResponse('Database not available');
 
   try {
-    const body = await parseBody<{ id: string; name?: string; description?: string; ownerName?: string; ownerEmail?: string; ownerPhone?: string; plan?: string; status?: string; maxUsers?: number; maxProducts?: number; settings?: any; billingCycle?: string; subscriptionExpiresAt?: string | null; renew?: boolean; cajeroPermissions?: Record<string, boolean> }>(req);
-    const { id, renew, billingCycle, subscriptionExpiresAt, cajeroPermissions, ...updates } = body;
+    const body = await parseBody<{ id: string; name?: string; description?: string; ownerName?: string; ownerEmail?: string; ownerPhone?: string; plan?: string; status?: string; maxUsers?: number; maxProducts?: number; settings?: any; billingCycle?: string; subscriptionExpiresAt?: string | null; renew?: boolean }>(req);
+    const { id, renew, billingCycle, subscriptionExpiresAt, ...updates } = body;
     if (!id) return errorResponse('ID del tenant es requerido');
 
-    const current = await db.prepare('SELECT billing_cycle, subscription_expires_at, settings FROM nx_tenants WHERE id = ?').bind(id).first() as any;
+    const current = await db.prepare('SELECT billing_cycle, subscription_expires_at FROM nx_tenants WHERE id = ?').bind(id).first() as any;
     if (!current) return errorResponse('Negocio no encontrado', 404);
 
     const sets: string[] = ['updated_at = datetime(\'now\')'];
@@ -180,19 +179,9 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    // settings se mezcla con lo guardado (no se pierden otras claves).
-    // cajeroPermissions: permisos del rol cajero en el POS (boton "Permisos del cajero").
-    if (updates.settings || cajeroPermissions !== undefined) {
-      let merged: Record<string, unknown> = {};
-      try { merged = JSON.parse(current.settings || '{}') || {}; } catch { merged = {}; }
-      if (updates.settings && typeof updates.settings === 'object') merged = { ...merged, ...updates.settings };
-      if (cajeroPermissions !== undefined) {
-        const perms = sanitizeCajeroPermissions(cajeroPermissions);
-        if (!perms) return errorResponse('Permisos del cajero invalidos');
-        merged.cajeroPermissions = perms;
-      }
+    if (updates.settings) {
       sets.push('settings = ?');
-      values.push(JSON.stringify(merged));
+      values.push(JSON.stringify(updates.settings));
     }
 
     // Suscripcion: ciclo de cobro, fecha de corte y renovacion con un clic

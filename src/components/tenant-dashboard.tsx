@@ -197,7 +197,7 @@ export default function TenantDashboard() {
                   <tr key={u.id}>
                     <td className="font-mono text-xs">{u.username}</td>
                     <td>{u.full_name}</td>
-                    <td><span className={`nexus-badge ${u.role === 'admin' ? 'nexus-badge-purple' : 'nexus-badge-green'}`}>{u.role === 'admin' ? 'admin' : 'cajero'}</span></td>
+                    <td><span className={`nexus-badge ${u.role === 'admin' ? 'nexus-badge-purple' : u.role === 'cajero' ? 'nexus-badge-green' : 'nexus-badge-blue'}`}>{u.role}</span></td>
                     <td><span className={`nexus-badge ${u.is_active ? 'nexus-badge-green' : 'nexus-badge-red'}`}>{u.is_active ? 'Activo' : 'Inactivo'}</span></td>
                     <td className="text-xs" style={{color:'var(--text-muted)'}}>{u.last_login ? new Date(u.last_login).toLocaleString('es') : 'Nunca'}</td>
                   </tr>
