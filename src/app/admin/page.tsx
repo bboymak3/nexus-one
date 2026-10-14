@@ -412,7 +412,6 @@ export default function AdminDashboard() {
                 <select className="nexus-input" value={userForm.role} onChange={e => setUserForm(p => ({...p, role: e.target.value}))}>
                   <option value="admin">Administrador</option>
                   <option value="cajero">Cajero</option>
-                  <option value="vendedor">Vendedor</option>
                 </select>
               </div>
             </div>
