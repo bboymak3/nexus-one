@@ -3,6 +3,7 @@ import { getRequestContext } from '@cloudflare/next-on-pages';
 import { verifySessionToken } from '@/lib/session';
 import { hashPassword } from '@/lib/auth';
 import { sanitizeCajeroPermissions } from '@/lib/cajero-permissions';
+import { ZONAS_PREFIJO } from '@/lib/zonas';
 import { jsonResponse, errorResponse, unauthorizedResponse, parseBody, slugify } from '@/lib/response';
 import { isBillingCycle, addBillingCycle, renewedExpiry, type BillingCycle } from '@/lib/subscription';
 
@@ -95,6 +96,10 @@ export async function POST(req: NextRequest) {
     const slug = body.slug || slugify(name);
     if (!/^[a-z0-9-]+$/.test(slug)) {
       return errorResponse('El slug solo puede contener letras minusculas, numeros y guiones');
+    }
+    // Rutas propias del panel: un negocio con ese slug no podria entrar a su login
+    if (['admin', 'api', ZONAS_PREFIJO].includes(slug)) {
+      return errorResponse('Esa URL esta reservada, elige otra');
     }
 
     // Check slug uniqueness

@@ -37,6 +37,7 @@ npm run db:schema                # aplica el esquema a la D1 remota (idempotente
 - **Superadmin inicial:** la semilla trae una clave marcador inutilizable (contiene `fixedsalt`). En el primer login se reemplaza por el hash de `SUPERADMIN_INITIAL_PASSWORD` (mínimo 8 caracteres).
 - **Claves:** PBKDF2-SHA256 con Web Crypto (`src/lib/auth.ts`), con 100k iteraciones: el límite de Workers impide usar más.
 - **Fechas:** el negocio opera en hora de Venezuela (UTC-4). `formatDate` usa `timeZone: 'America/Caracas'`.
+- **Landing:** `/` es la landing pública (`src/components/landing.tsx`); el login (`src/components/login-panel.tsx`) se abre desde ahí y sale directo en `/<slug>`, `?mode=admin` y `?login`. Las páginas de las zonas de Barinas son `/en/<zona>`, generadas desde `src/lib/zonas.ts`. WhatsApp, precios, ubicación y enlace a MundoNet están en `src/lib/landing-config.ts`. Los slugs `admin`, `api` y `en` están reservados.
 
 ## Configuración
 - `wrangler.toml`: binding `DB` (D1 `ok_db`) y la variable `MYECOMMERCE_URL`. Con `wrangler.toml` presente, Cloudflare ignora las variables normales del panel: las variables van en el toml y los secretos con `npx wrangler pages secret put <NOMBRE> --project-name=nexus-one`.
