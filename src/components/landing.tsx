@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import LoginPanel from '@/components/login-panel';
 import { landingConfig as cfg, whatsappUrl } from '@/lib/landing-config';
-import { ZONAS, ZONAS_PREFIJO, type Zona } from '@/lib/zonas';
+import { ZONAS, ZONAS_PREFIJO, lugarDe, type Zona } from '@/lib/zonas';
 
 type LoginMode = 'landing' | 'admin' | 'tenant';
 
@@ -181,7 +181,7 @@ function Landing({ onLogin, zona }: { onLogin: (m: LoginMode) => void; zona?: Zo
   const [annual, setAnnual] = useState(false);
   const [menu, setMenu] = useState(false);
   const [zonasOpen, setZonasOpen] = useState(false);
-  const lugar = zona ? (zona.slug === 'barinas' ? 'Barinas' : `${zona.nombre}, Barinas`) : cfg.ubicacion;
+  const lugar = zona ? lugarDe(zona) : cfg.ubicacion;
   const hasAnnual = cfg.planes.some((p) => p.precioAnual != null);
   const nav = [['#funciones', 'Funciones'], ['#planes', 'Planes'], ['#nosotros', 'Quiénes somos'], ['#contacto', 'Contacto']];
 
@@ -201,7 +201,7 @@ function Landing({ onLogin, zona }: { onLogin: (m: LoginMode) => void; zona?: Zo
             {nav.map(([h, l]) => <a key={h} href={h} className="hover:text-white transition-colors">{l}</a>)}
             <div className="relative" onMouseLeave={() => setZonasOpen(false)}>
               <button onClick={() => setZonasOpen(!zonasOpen)} onMouseEnter={() => setZonasOpen(true)} className="flex items-center gap-1 hover:text-white transition-colors" aria-expanded={zonasOpen}>
-                Barinas
+                Zonas
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
               </button>
               {zonasOpen && (
@@ -227,7 +227,7 @@ function Landing({ onLogin, zona }: { onLogin: (m: LoginMode) => void; zona?: Zo
           <nav className="md:hidden px-4 pb-4 flex flex-col gap-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
             {nav.map(([h, l]) => <a key={h} href={h} onClick={() => setMenu(false)} className="py-2.5 px-2 rounded-lg hover:text-white">{l}</a>)}
             <a href={cfg.empresa.url} target="_blank" rel="noopener noreferrer" className="py-2.5 px-2 rounded-lg hover:text-white">{cfg.empresa.nombre}</a>
-            <p className="px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Barinas</p>
+            <p className="px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Zonas</p>
             <div className="grid grid-cols-2 gap-1">
               {ZONAS.map((z) => (
                 <a key={z.slug} href={zonaUrl(z)} className="py-2 px-2 rounded-lg hover:text-white" style={zona?.slug === z.slug ? { color: '#c4b5fd' } : undefined}>{z.nombre}</a>
@@ -382,17 +382,17 @@ function Landing({ onLogin, zona }: { onLogin: (m: LoginMode) => void; zona?: Zo
           </div>
         </section>
 
-        {/* Barinas */}
+        {/* Zonas */}
         <section id="barinas" className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
           <div className="rounded-3xl p-6 sm:p-12 lp-cta">
             <div className="grid md:grid-cols-5 gap-8 items-center">
               <div className="md:col-span-2">
                 <p className="text-xs font-semibold uppercase tracking-widest mb-3 flex items-center gap-2" style={{ color: '#22d3ee' }}><PinIcon /> {cfg.ubicacion}</p>
-                <h2 className="text-2xl sm:text-3xl font-bold mb-4">{zona ? `Estamos en ${zona.nombre}` : 'Llegamos a Barinas'}</h2>
+                <h2 className="text-2xl sm:text-3xl font-bold mb-4">{zona ? `Estamos en ${zona.nombre}` : 'Llegamos a Barinas y Portuguesa'}</h2>
                 <p className="leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                   {zona
-                    ? `Atendemos a los comercios de ${lugar} con instalación, carga de productos y soporte por WhatsApp. También estamos en el resto de Barinas:`
-                    : 'Estamos en Barinas, Venezuela, y atendemos a los comercios de toda la región: te ayudamos a arrancar, cargamos tus productos y te damos soporte por WhatsApp. Busca tu zona:'}
+                    ? `Atendemos a los comercios de ${lugar} con instalación, carga de productos y soporte por WhatsApp. También estamos en:`
+                    : 'Estamos en Barinas, Venezuela, y atendemos a los comercios de Barinas y Portuguesa: te ayudamos a arrancar, cargamos tus productos y te damos soporte por WhatsApp. Busca tu zona:'}
                 </p>
               </div>
               <div className="md:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
