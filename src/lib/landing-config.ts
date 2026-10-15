@@ -11,6 +11,12 @@ export const landingConfig = {
   whatsapp: '',
   whatsappMensaje: 'Hola, quiero información sobre Nexus One y el sistema de punto de venta.',
 
+  /** Donde estamos (se muestra en la pagina de inicio y en el pie). */
+  ubicacion: 'Barinas, Venezuela',
+
+  /** Empresa detras de la plataforma: enlace en el menu, "Quienes somos" y el pie. */
+  empresa: { nombre: 'MundoNet', url: 'https://mundonet.app' },
+
   /** Correo de contacto (opcional; vacio = no se muestra). */
   email: '',
 
@@ -73,7 +79,7 @@ export const landingConfig = {
   ],
 
   quienesSomos: [
-    'Somos un equipo venezolano que desarrolla software para comercios: bodegas, ferreterías, tiendas y distribuidoras que necesitan vender rápido, controlar su inventario y saber cuánto ganan.',
+    'Somos MundoNet, un equipo de Barinas, Venezuela. Desarrollamos software para comercios: bodegas, ferreterías, tiendas y distribuidoras que necesitan vender rápido, controlar su inventario y saber cuánto ganan.',
     'Nexus One nació para que cada negocio tenga su propio sistema de punto de venta en la nube, sin instalar nada y pensado para la realidad del país: precios en dólares y bolívares, tasa BCV y ventas a crédito.',
   ],
 };
