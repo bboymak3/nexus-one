@@ -9,10 +9,14 @@ export interface Zona {
 
 export const ZONAS: Zona[] = [
   { slug: 'barinas', nombre: 'Barinas', estado: 'Barinas' },
+  { slug: 'alto-barinas', nombre: 'Alto Barinas', estado: 'Barinas' },
+  { slug: 'santa-lucia', nombre: 'Santa Lucía', estado: 'Barinas' },
+  { slug: 'la-luz', nombre: 'La Luz', estado: 'Barinas' },
   { slug: 'sabaneta', nombre: 'Sabaneta', estado: 'Barinas' },
   { slug: 'santa-rosa', nombre: 'Santa Rosa', estado: 'Barinas' },
   { slug: 'santa-barbara', nombre: 'Santa Bárbara', estado: 'Barinas' },
   { slug: 'barinitas', nombre: 'Barinitas', estado: 'Barinas' },
+  { slug: 'barrancas', nombre: 'Barrancas', estado: 'Barinas' },
   { slug: 'bum-bum', nombre: 'Bum Bum', estado: 'Barinas' },
   { slug: 'socopo', nombre: 'Socopó', estado: 'Barinas' },
   { slug: 'san-silvestre', nombre: 'San Silvestre', estado: 'Barinas' },
