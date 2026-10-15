@@ -8,7 +8,7 @@ export const landingConfig = {
    * WhatsApp de contacto en formato internacional, solo digitos (Venezuela: 58 + numero sin
    * el 0). Ejemplo: '584121234567'. Vacio = el boton abre WhatsApp para elegir el contacto.
    */
-  whatsapp: '',
+  whatsapp: '584220550136',
   whatsappMensaje: 'Hola, quiero información sobre Nexus One y el sistema de punto de venta.',
 
   /** Donde estamos (se muestra en la pagina de inicio y en el pie). */
