@@ -1,11 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { getRequestContext } from '@cloudflare/next-on-pages';
 
-// Clave usada hasta ahora (estaba publicada en el repo). Se mantiene SOLO como
-// respaldo para no cortar el servicio mientras se configura el secreto JWT_SECRET.
-const LEGACY_SECRET = 'nexus-one-super-secret-change-in-production-2024';
-let warnedLegacy = false;
-
 /**
  * Lee una variable/secreto de Cloudflare (bindings) o de process.env.
  */
@@ -17,14 +12,17 @@ export function readEnv(name: string): string | undefined {
   return process.env[name] || undefined;
 }
 
+/** true si el secreto JWT_SECRET esta configurado (sin el no se puede iniciar sesion). */
+export function hasSessionSecret(): boolean {
+  return !!readEnv('JWT_SECRET');
+}
+
+// Sin JWT_SECRET no hay sesiones: antes se usaba una clave fija publicada en el repo,
+// con la que cualquiera podia firmar un token de super admin.
 const getSecret = () => {
   const secret = readEnv('JWT_SECRET');
-  if (secret) return new TextEncoder().encode(secret);
-  if (!warnedLegacy) {
-    warnedLegacy = true;
-    console.warn('[session] JWT_SECRET no configurado: usando la clave anterior. Configure: npx wrangler pages secret put JWT_SECRET');
-  }
-  return new TextEncoder().encode(LEGACY_SECRET);
+  if (!secret) throw new Error('JWT_SECRET no configurado. Ejecute: npx wrangler pages secret put JWT_SECRET --project-name=nexus-one');
+  return new TextEncoder().encode(secret);
 };
 
 export async function createSessionToken(payload: {
@@ -44,7 +42,7 @@ export async function createSessionToken(payload: {
 
 export async function verifySessionToken(token: string) {
   try {
-    const { payload } = await jwtVerify(token, getSecret());
+    const { payload } = await jwtVerify(token, getSecret(), { algorithms: ['HS256'] });
     return payload as {
       userId: string;
       userType: 'super_admin' | 'tenant';

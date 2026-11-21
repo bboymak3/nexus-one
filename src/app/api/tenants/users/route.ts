@@ -3,7 +3,7 @@ import { getRequestContext } from '@cloudflare/next-on-pages';
 import { verifySessionToken } from '@/lib/session';
 import { hashPassword } from '@/lib/auth';
 import { jsonResponse, errorResponse, unauthorizedResponse, parseBody } from '@/lib/response';
-import { getActiveTenantSession, getTenantSession } from '@/lib/guards';
+import { getActiveTenantSession, getTenantSession, getSuperAdminSession, MIN_PASSWORD_LENGTH } from '@/lib/guards';
 
 // Roles: admin y cajero ('vendedor' se fusiono en cajero y se guarda como cajero)
 const VALID_ROLES = ['admin', 'cajero', 'vendedor'];
@@ -31,7 +31,9 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const tenantId = url.searchParams.get('tenantId') || payload.tenantId;
 
-  if (payload.userType !== 'super_admin') {
+  if (payload.userType === 'super_admin') {
+    if (!(await getSuperAdminSession(db, payload))) return unauthorizedResponse();
+  } else {
     // Solo lectura: un negocio suspendido o vencido igual puede ver su propia lista
     // de usuarios en el panel (lo que no puede es abrir el punto de venta).
     const session = await getTenantSession(db, payload);
@@ -72,14 +74,18 @@ export async function POST(req: NextRequest) {
     if (!tenantId || !username || !password) {
       return errorResponse('tenantId, username y password son requeridos');
     }
-    if (password.length < 4) return errorResponse('La clave debe tener al menos 4 caracteres');
+    if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
+      return errorResponse(`La clave debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres`);
+    }
     if (!/^[a-zA-Z0-9._-]{3,50}$/.test(username)) {
       return errorResponse('Usuario invalido: 3-50 caracteres (letras, numeros, punto, guion)');
     }
     if (!VALID_ROLES.includes(role)) return errorResponse('Rol invalido. Use: admin, cajero');
 
     // Un usuario de negocio solo puede crear usuarios en SU negocio y debe ser admin
-    if (payload.userType !== 'super_admin') {
+    if (payload.userType === 'super_admin') {
+      if (!(await getSuperAdminSession(db, payload))) return unauthorizedResponse();
+    } else {
       const active = await getActiveTenantSession(db, payload);
       if (!active || active.tenant.id !== tenantId) return unauthorizedResponse();
       if (active.user.role !== 'admin') return errorResponse('Solo un administrador del negocio puede crear usuarios', 403);
@@ -111,7 +117,8 @@ export async function POST(req: NextRequest) {
       user: { id, username, fullName: fullName || username, role },
     }, 201);
   } catch (error: any) {
-    return errorResponse(error.message || 'Error al crear usuario', 500);
+    console.error('[tenants/users]', error);
+    return errorResponse('Error al crear usuario', 500);
   }
 }
 
@@ -120,10 +127,10 @@ export async function DELETE(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '');
   if (!token) return unauthorizedResponse();
   const payload = await verifySessionToken(token);
-  if (!payload || payload.userType !== 'super_admin') return unauthorizedResponse();
 
   const db = getDB();
   if (!db) return errorResponse('Database not available');
+  if (!(await getSuperAdminSession(db, payload))) return unauthorizedResponse();
 
   const { id } = await parseBody<{ id: string }>(req);
   if (!id) return errorResponse('ID del usuario es requerido');
