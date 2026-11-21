@@ -17,8 +17,8 @@ NODE_ENV = "production"
 # normales definidas en el panel (los secretos si se respetan).
 MYECOMMERCE_URL = "https://myecommerce-pos-7g0.pages.dev"
 
-# Secretos (NO van en este archivo). Mientras JWT_SECRET no exista se usa la clave
-# anterior; el boton "Abrir Punto de Venta" requiere NEXUS_SSO_SECRET. Configurar con:
+# Secretos (NO van en este archivo). JWT_SECRET es obligatorio (sin el no hay login);
+# el boton "Abrir Punto de Venta" requiere NEXUS_SSO_SECRET. Configurar con:
 #   npx wrangler pages secret put JWT_SECRET --project-name=nexus-one
 #   npx wrangler pages secret put NEXUS_SSO_SECRET --project-name=nexus-one            (mismo valor que en myecommerce-pos)
 #   npx wrangler pages secret put SUPERADMIN_INITIAL_PASSWORD --project-name=nexus-one (solo para el primer login)

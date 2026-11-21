@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getRequestContext } from '@cloudflare/next-on-pages';
 import { verifySessionToken } from '@/lib/session';
+import { getSuperAdminSession, MIN_PASSWORD_LENGTH } from '@/lib/guards';
 import { hashPassword } from '@/lib/auth';
 import { sanitizeCajeroPermissions } from '@/lib/cajero-permissions';
 import { ZONAS_PREFIJO } from '@/lib/zonas';
@@ -17,19 +18,21 @@ function getDB(): any {
   return null;
 }
 
-function requireSuperAdmin(req: NextRequest) {
+// Token valido de super admin que ademas sigue activo en la base
+async function requireSuperAdmin(req: NextRequest, db: any) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return null;
-  return verifySessionToken(token);
+  if (!token || !db) return null;
+  const payload = await verifySessionToken(token);
+  return (await getSuperAdminSession(db, payload)) ? payload : null;
 }
 
 // GET /api/tenants - List all tenants
 export async function GET(req: NextRequest) {
-  const payload = await requireSuperAdmin(req);
-  if (!payload || payload.userType !== 'super_admin') return unauthorizedResponse();
-
   const db = getDB();
   if (!db) return errorResponse('Database not available');
+
+  const payload = await requireSuperAdmin(req, db);
+  if (!payload) return unauthorizedResponse();
 
   const url = new URL(req.url);
   const status = url.searchParams.get('status') || 'all';
@@ -63,11 +66,11 @@ export async function GET(req: NextRequest) {
 
 // POST /api/tenants - Create tenant
 export async function POST(req: NextRequest) {
-  const payload = await requireSuperAdmin(req);
-  if (!payload || payload.userType !== 'super_admin') return unauthorizedResponse();
-
   const db = getDB();
   if (!db) return errorResponse('Database not available');
+
+  const payload = await requireSuperAdmin(req, db);
+  if (!payload) return unauthorizedResponse();
 
   try {
     const body = await parseBody<{
@@ -93,6 +96,10 @@ export async function POST(req: NextRequest) {
       return errorResponse('El nombre del negocio es requerido (min 2 caracteres)');
     }
 
+    if (ownerPassword && (typeof ownerPassword !== 'string' || ownerPassword.length < MIN_PASSWORD_LENGTH)) {
+      return errorResponse(`La clave del administrador debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres`);
+    }
+
     const slug = body.slug || slugify(name);
     if (!/^[a-z0-9-]+$/.test(slug)) {
       return errorResponse('El slug solo puede contener letras minusculas, numeros y guiones');
@@ -115,7 +122,7 @@ export async function POST(req: NextRequest) {
     `).bind(id, name.trim(), slug, description || '', ownerName || '', ownerEmail || '', ownerPhone || '', plan || 'basic', maxUsers || 5, maxProducts || 500, billingCycle, firstExpiry ? firstExpiry.toISOString() : null, now, now).run();
 
     // Create owner user if credentials provided
-    if (ownerPassword && ownerPassword.length >= 4) {
+    if (ownerPassword) {
       const username = slug + '-admin';
       const hashedPw = await hashPassword(ownerPassword);
       const userId = 'tu-' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
@@ -149,17 +156,18 @@ export async function POST(req: NextRequest) {
       },
     }, 201);
   } catch (error: any) {
-    return errorResponse(error.message || 'Error al crear negocio', 500);
+    console.error('[tenants]', error);
+    return errorResponse('Error al crear negocio', 500);
   }
 }
 
 // PUT /api/tenants - Update tenant
 export async function PUT(req: NextRequest) {
-  const payload = await requireSuperAdmin(req);
-  if (!payload || payload.userType !== 'super_admin') return unauthorizedResponse();
-
   const db = getDB();
   if (!db) return errorResponse('Database not available');
+
+  const payload = await requireSuperAdmin(req, db);
+  if (!payload) return unauthorizedResponse();
 
   try {
     const body = await parseBody<{ id: string; name?: string; description?: string; ownerName?: string; ownerEmail?: string; ownerPhone?: string; plan?: string; status?: string; maxUsers?: number; maxProducts?: number; settings?: any; billingCycle?: string; subscriptionExpiresAt?: string | null; renew?: boolean; cajeroPermissions?: Record<string, boolean> }>(req);
@@ -243,17 +251,18 @@ export async function PUT(req: NextRequest) {
 
     return jsonResponse({ success: true, message: renew ? 'Suscripcion renovada' : 'Negocio actualizado', subscriptionExpiresAt: newExpiry !== undefined ? newExpiry : current.subscription_expires_at });
   } catch (error: any) {
-    return errorResponse(error.message || 'Error al actualizar', 500);
+    console.error('[tenants]', error);
+    return errorResponse('Error al actualizar', 500);
   }
 }
 
 // DELETE /api/tenants - Delete tenant
 export async function DELETE(req: NextRequest) {
-  const payload = await requireSuperAdmin(req);
-  if (!payload || payload.userType !== 'super_admin') return unauthorizedResponse();
-
   const db = getDB();
   if (!db) return errorResponse('Database not available');
+
+  const payload = await requireSuperAdmin(req, db);
+  if (!payload) return unauthorizedResponse();
 
   const { id } = await parseBody<{ id: string }>(req);
   if (!id) return errorResponse('ID del tenant es requerido');

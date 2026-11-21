@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getRequestContext } from '@cloudflare/next-on-pages';
 import { verifySessionToken } from '@/lib/session';
+import { getSuperAdminSession } from '@/lib/guards';
 import { jsonResponse, errorResponse, unauthorizedResponse } from '@/lib/response';
 
 export const runtime = 'edge';
@@ -21,10 +22,10 @@ export async function GET(
   const token = req.headers.get('authorization')?.replace('Bearer ', '');
   if (!token) return unauthorizedResponse();
   const payload = await verifySessionToken(token);
-  if (!payload || payload.userType !== 'super_admin') return unauthorizedResponse();
 
   const db = getDB();
   if (!db) return errorResponse('Database not available');
+  if (!(await getSuperAdminSession(db, payload))) return unauthorizedResponse();
 
   const { id } = await params;
   const tenant = await db.prepare('SELECT * FROM nx_tenants WHERE id = ?').bind(id).first() as any;

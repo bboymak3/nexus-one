@@ -387,7 +387,7 @@ export default function AdminDashboard() {
                 <p className="text-xs font-medium mb-2" style={{color:'var(--text-secondary)'}}>Credenciales del Administrador del Negocio</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium mb-1" style={{color:'var(--text-muted)'}}>Clave (min 4 caracteres)</label>
+                    <label className="block text-xs font-medium mb-1" style={{color:'var(--text-muted)'}}>Clave (min 8 caracteres)</label>
                     <input type="password" className="nexus-input" placeholder="Clave del admin" value={form.ownerPassword} onChange={e => setForm(p => ({...p, ownerPassword: e.target.value}))} />
                   </div>
                   <div className="flex items-end text-xs" style={{color:'var(--text-muted)'}}>

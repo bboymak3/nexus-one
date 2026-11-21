@@ -53,6 +53,8 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({ url: `${posBaseUrl}/api/nexus-sso?token=${encodeURIComponent(ssoToken)}` });
   } catch (error: any) {
-    return errorResponse(error.message || 'Error al generar acceso al POS', 500);
+    console.error('[sso]', error);
+    const msg = String(error?.message || '').startsWith('NEXUS_SSO_SECRET') ? error.message : 'Error al generar acceso al POS';
+    return errorResponse(msg, 500);
   }
 }

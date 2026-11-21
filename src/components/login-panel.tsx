@@ -64,7 +64,7 @@ export default function LoginPanel({ onBack, initialMode = 'landing' }: { onBack
       }
 
       // Store token
-      document.cookie = `session_token=${data.token}; path=/; max-age=86400; SameSite=Lax`;
+      document.cookie = `session_token=${data.token}; path=/; max-age=86400; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`;
       localStorage.setItem('nexus_token', data.token);
       localStorage.setItem('nexus_user', JSON.stringify(data.user));
       localStorage.setItem('nexus_userType', data.userType);

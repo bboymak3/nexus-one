@@ -103,7 +103,7 @@ Secretos (nunca en el repo):
 
 | Secreto | Uso |
 |---|---|
-| `JWT_SECRET` | Firma las sesiones. Mientras no exista se usa una clave anterior (con aviso en el log): configúralo |
+| `JWT_SECRET` | Firma las sesiones. **Obligatorio**: sin él no se puede iniciar sesión (ya no hay clave de respaldo) |
 | `NEXUS_SSO_SECRET` | Firma el token de acceso al POS. **Mismo valor** en el proyecto `myecommerce-pos` |
 | `SUPERADMIN_INITIAL_PASSWORD` | Clave del `superadmin` en su primer login (mín. 8 caracteres). Luego se guarda su hash y ya no se usa |
 

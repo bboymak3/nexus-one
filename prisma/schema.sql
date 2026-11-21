@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS nx_activity_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_nx_activity_logs_tenant ON nx_activity_logs(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_nx_activity_logs_created ON nx_activity_logs(created_at);
+-- Limite de intentos de login (action = 'login_failed')
+CREATE INDEX IF NOT EXISTS idx_nx_activity_logs_action ON nx_activity_logs(action, created_at);
 
 -- ============================================
 -- SEED: Default Super Admin

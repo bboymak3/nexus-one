@@ -1,12 +1,18 @@
 import { NextRequest } from 'next/server';
 import { getRequestContext } from '@cloudflare/next-on-pages';
 import { hashPassword, verifyPassword } from '@/lib/auth';
-import { createSessionToken, verifySessionToken, readEnv } from '@/lib/session';
+import { createSessionToken, verifySessionToken, readEnv, hasSessionSecret } from '@/lib/session';
 import { jsonResponse, errorResponse, unauthorizedResponse, parseBody } from '@/lib/response';
-import { getTenantSession } from '@/lib/guards';
+import {
+  getTenantSession, getSuperAdminSession, clientIp, isLoginBlocked, recordLoginFailure,
+  LOGIN_BLOCKED_MESSAGE, MIN_PASSWORD_LENGTH,
+} from '@/lib/guards';
 import { isExpired, formatDate } from '@/lib/subscription';
 
 export const runtime = 'edge';
+
+// Hash valido de una clave aleatoria: se verifica contra el cuando el usuario no existe
+const DUMMY_HASH = 'pbkdf2_sha256$100000$' + '00'.repeat(32) + '$' + '00'.repeat(32);
 
 // Helper to get D1 from request context
 function getDB(): any {
@@ -26,15 +32,30 @@ export async function POST(req: NextRequest) {
     const body = await parseBody<{ username: string; password: string; action: string }>(req);
     const { username, password, action } = body;
 
-    if (!username || !password) {
+    if (!username || !password || typeof username !== 'string' || typeof password !== 'string') {
       return errorResponse('Usuario y clave son requeridos');
+    }
+    if (username.length > 100 || password.length > 200) return errorResponse('Credenciales invalidas');
+
+    const isLogin = action === 'admin_login' || action === 'tenant_login' || !action;
+    const ip = clientIp(req);
+    if (isLogin) {
+      if (!hasSessionSecret()) {
+        return errorResponse('Inicio de sesion no disponible: falta el secreto JWT_SECRET en Cloudflare.', 503);
+      }
+      if (await isLoginBlocked(db, username, ip)) return errorResponse(LOGIN_BLOCKED_MESSAGE, 429);
     }
 
     // ===== SUPER ADMIN LOGIN =====
     if (action === 'admin_login' || !action) {
       const admins = await db.prepare('SELECT * FROM nx_super_admins WHERE username = ? AND is_active = 1').bind(username).all();
       const admin = admins.results?.[0] as any;
-      if (!admin) return errorResponse('Credenciales invalidas');
+      if (!admin) {
+        // Mismo costo que una clave equivocada: no revela si el usuario existe
+        await verifyPassword(password, DUMMY_HASH);
+        await recordLoginFailure(db, username, ip, 'super_admin');
+        return errorResponse('Credenciales invalidas');
+      }
 
       // Primera configuracion: la semilla trae una clave marcador (no utilizable).
       // La clave inicial se toma del secreto SUPERADMIN_INITIAL_PASSWORD; ya no
@@ -50,7 +71,10 @@ export async function POST(req: NextRequest) {
       }
 
       const valid = await verifyPassword(password, storedPassword);
-      if (!valid) return errorResponse('Credenciales invalidas');
+      if (!valid) {
+        await recordLoginFailure(db, username, ip, 'super_admin');
+        return errorResponse('Credenciales invalidas');
+      }
 
       await db.prepare('UPDATE nx_super_admins SET last_login = datetime(\'now\') WHERE id = ?').bind(admin.id).run();
 
@@ -98,7 +122,10 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      if (!user || !tenant) return errorResponse('Credenciales invalidas');
+      if (!user || !tenant) {
+        await recordLoginFailure(db, username, ip, 'tenant');
+        return errorResponse('Credenciales invalidas');
+      }
       // El negocio suspendido o vencido SI puede entrar a su panel (para ver el aviso y
       // renovar); solo se le bloquea abrir el punto de venta (ver /api/sso).
 
@@ -137,13 +164,16 @@ export async function POST(req: NextRequest) {
     if (action === 'create_tenant_user') {
       const tokenStr = req.headers.get('authorization')?.replace('Bearer ', '');
       const session = tokenStr ? await verifySessionToken(tokenStr) : null;
-      if (!session || session.userType !== 'super_admin') return unauthorizedResponse();
+      if (!(await getSuperAdminSession(db, session))) return unauthorizedResponse();
 
       const { tenantId, fullName, role } = body as any;
       if (!tenantId) return errorResponse('tenantId requerido');
       const tenantExists = await db.prepare('SELECT id FROM nx_tenants WHERE id = ?').bind(tenantId).first();
       if (!tenantExists) return errorResponse('Negocio no encontrado');
-      if (password.length < 4) return errorResponse('La clave debe tener al menos 4 caracteres');
+      if (password.length < MIN_PASSWORD_LENGTH) return errorResponse(`La clave debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres`);
+      if (!/^[a-zA-Z0-9._-]{3,50}$/.test(username)) {
+        return errorResponse('Usuario invalido: 3-50 caracteres (letras, numeros, punto, guion)');
+      }
       if (role && !['admin', 'vendedor', 'cajero'].includes(role)) return errorResponse('Rol invalido');
 
       // Check if user already exists for this tenant
@@ -166,19 +196,28 @@ export async function POST(req: NextRequest) {
       const tokenStr = req.headers.get('authorization')?.replace('Bearer ', '');
       if (!tokenStr) return unauthorizedResponse();
       const payload = await verifySessionToken(tokenStr);
-      if (!payload || payload.userType !== 'super_admin') return unauthorizedResponse();
+      if (!(await getSuperAdminSession(db, payload))) return unauthorizedResponse();
+
+      // `password` es la clave actual: un token robado no basta para cambiarla
+      const current = await db.prepare('SELECT password FROM nx_super_admins WHERE id = ?').bind(payload!.userId).first() as any;
+      if (!current || !(await verifyPassword(password, current.password))) {
+        return errorResponse('La clave actual no es correcta', 403);
+      }
 
       const { newPassword } = body as any;
-      if (!newPassword || newPassword.length < 6) return errorResponse('La clave debe tener al menos 6 caracteres');
+      if (typeof newPassword !== 'string' || newPassword.length < MIN_PASSWORD_LENGTH) {
+        return errorResponse(`La clave debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres`);
+      }
 
       const hashed = await hashPassword(newPassword);
-      await db.prepare('UPDATE nx_super_admins SET password = ? WHERE id = ?').bind(hashed, payload.userId).run();
+      await db.prepare('UPDATE nx_super_admins SET password = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(hashed, payload!.userId).run();
       return jsonResponse({ success: true, message: 'Clave actualizada' });
     }
 
     return errorResponse('Accion no valida', 400);
   } catch (error: any) {
-    return errorResponse(error.message || 'Error del servidor', 500);
+    console.error('[auth]', error);
+    return errorResponse('Error del servidor', 500);
   }
 }
 
